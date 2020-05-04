@@ -1,2 +1,2 @@
-# beef
+# BEEF
 BEam Elements Framework
