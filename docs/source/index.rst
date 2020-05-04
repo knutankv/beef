@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to the KOMA documentation!
+Welcome to the BEEF documentation!
 ==============================================
 
 .. image:: beef-logo.svg
@@ -17,7 +17,6 @@ BEEF ...
    :caption: Contents:
 
    installation
-   code
    examples
    licensing
    references
