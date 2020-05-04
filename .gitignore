@@ -1,0 +1,6 @@
+*.pyc
+*.bat
+_build
+_static
+_templates
+build

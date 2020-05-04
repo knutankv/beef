@@ -1,0 +1,5 @@
+sphinxcontrib-bibtex
+sphinxcontrib-matlabdomain
+recommonmark
+nbsphinx
+sphinx==2.4.0
