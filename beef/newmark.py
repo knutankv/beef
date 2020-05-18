@@ -1,5 +1,55 @@
+"""
+##############################################
+Newmark time simulation module
+##############################################
+All functions related to Newmark solutions.
+"""
+
+
 import numpy as np
 
+def tester():
+    print('Yes!')
+
+    
+def tester2():
+    print('Yes yes!')
+
+def is_converged(values, tols, scaling=None):
+    """
+    Check whether multiple values are below specified tolerances.  (value/scaling)
+    
+    Parameters
+    -----------------
+    values : double
+        list of values to check
+    tols : double
+        corresponding list of tolerances to compare values to
+    scaling : double, optional
+        corresponding list of scaling of values
+
+
+    Returns
+    -----------------
+    ok : boolean
+        converged or not?
+
+    Notes
+    --------------------
+    If entry in tols is None, the corresponding value is assumed to pass tolerance criterion. 
+    If entry in tols is different than None, the value pass if value <= tol * scaling.
+            
+
+    """
+    
+    if scaling is None:
+        scaling = np.ones([len(tols)])
+    
+    for ix, value in enumerate(values):
+        if (tols[ix] is not None) and (value>tols[ix]*scaling[ix]):
+            return False
+        
+    return True
 
 def acc_estimate(K, C, M, f, udot, u=None, f_int=None, dt=None, beta=None, gamma=None):
     """
@@ -43,16 +93,13 @@ def acc_estimate(K, C, M, f, udot, u=None, f_int=None, dt=None, beta=None, gamma
             f_int = K @ u
         else:
             raise ValueError('Input either f_int or u!')
-    
-    if np.linalg.det(M) == 0:
-        M_eff = M + gamma*dt*C + beta*dt**2*K
-        acc = np.linalg.solve(M_eff, f - C @ udot - f_int)
-    else:
-        acc = np.linalg.solve(M, f - C @ udot - f_int)
+
+    acc = np.linalg.solve(M, f - C @ udot - f_int)
+
     return acc
 
 
-def pred(u, udot, uddot, dt, beta, gamma):
+def pred(u, udot, uddot, dt):
     """
     Predictor step in non-linear Newmark algorithm.
 
@@ -66,10 +113,7 @@ def pred(u, udot, uddot, dt, beta, gamma):
         Current acceleration (time step k), ndofs-by-1 Numpy array.
     dt : double
         Current time step, from k to k+1.
-    beta : double
-        Scalar value specifying the beta parameter. 
-    gamma : double
-        Scalar value specifying the gamma parameter.
+
 
     Returns:
     -----------
@@ -95,6 +139,8 @@ def corr(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
     Parameters:
     -----------
     f_int : double
+        Current internal forces (time step k).
+    K : double
         Next-step (tangent) stiffness matrix (time step k+1), 
         ndofs-by-ndofs Numpy array.
     C : double
@@ -124,23 +170,26 @@ def corr(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
         Predicted next-step velocity, time step k+1, iteration i+1, ndofs-by-1 Numpy array.
     uddot : double
         Predicted next-step acceleration, time step k+1), iteration i+1, ndofs-by-1 Numpy array.
-    r : double
-        Residual force
-    du : double
-        Added displacement in corrector step.
+    norm_r : double
+        Frobenius norm of residual force vector
+    norm_u : double
+        Frobenius norm of added displacement
 
     """
-    r = f - (M @ uddot + C @ udot + f_int)
-  
-    K_eff = K + (gamma*dt)/(beta*dt**2) * C + 1/(beta*dt**2) * M
+    r = f - (M @ uddot + C @ udot + f_int)  # residual prior to corrector
+
+    K_eff = K + (gamma*dt)/(beta*dt**2)*C + 1/(beta*dt**2)*M
     du = np.linalg.solve(K_eff, r)
     
     u = u + du
     udot = udot + gamma*dt/(beta*dt**2)*du
     uddot = uddot + 1/(beta*dt**2)*du    
 
-    return u, udot, uddot, r, du
-    
+    norm_r = np.linalg.norm(f - (M @ uddot + C @ udot + f_int))
+    norm_u = np.linalg.norm(du)
+
+    return u, udot, uddot, norm_r, norm_u
+                
 
 def corr_alt(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
     """
@@ -149,6 +198,8 @@ def corr_alt(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
     Parameters:
     -----------
     f_int : double
+        Current internal forces (time step k).
+    K : double
         Next-step (tangent) stiffness matrix (time step k+1), 
         ndofs-by-ndofs Numpy array.
     C : double
@@ -178,23 +229,26 @@ def corr_alt(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
         Predicted next-step velocity, time step k+1, iteration i+1, ndofs-by-1 Numpy array.
     uddot : double
         Predicted next-step acceleration, time step k+1), iteration i+1, ndofs-by-1 Numpy array.
-    r : double
-        Residual force
-    du : double
-        Added displacement in corrector step.
+    norm_r : double
+        Frobenius norm of residual force vector
+    norm_u : double
+        Frobenius norm of added displacement
 
     """
-    r = f - (M @ uddot + C @ udot + f_int)
+    r = f - (M @ uddot + C @ udot + f_int)  # residual prior to corrector
     Meff = M + C*gamma*dt + K*beta*dt**2
     duddot = np.linalg.solve(Meff, r)
+    
     uddot = uddot + duddot
     udot = udot + duddot*gamma*dt
     
-    du = beta*dt**2*duddot
+    du = duddot * beta*dt**2
     u = u + du
-        
-    return u, udot, uddot, r, du
-
+    
+    norm_r = np.linalg.norm(f - (M @ uddot + C @ udot + f_int))
+    norm_u = np.linalg.norm(du)
+    
+    return u, udot, uddot, norm_r, norm_u
 
 def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/6.0, gamma=0.5, 
              tol_u=1e-8, tol_r=1e-6, itmax=100):
@@ -221,6 +275,9 @@ def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/6.0, gamma=0.5
         Next-step acceleration, time step k+1, iteration i, ndofs-by-1 Numpy array.
     dt : double
         Current time step, from k to k+1.
+    f_int : optional, double
+        Current internal forces (time step k). Equal K @ u if not given, 
+        ndofs-by-1 Numpy array.
     beta : 1/6, double
         Scalar value specifying the beta parameter. 
     gamma : 0.5, double
@@ -256,17 +313,17 @@ def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/6.0, gamma=0.5
 
     """
     
-    u, udot, uddot = pred(u, udot, uddot, dt, beta, gamma)
+    u, udot, uddot = pred(u, udot, uddot, dt)
      
     if f_int is None:
         f_int = K @ u
         
     for it in range(itmax):
-        u, udot, uddot, r, du = corr(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma)
+        u, udot, uddot, norm_r, norm_u = corr(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma)
 
-        if (np.linalg.norm(r)<tol_r) or ((np.linalg.norm(du)/np.linalg.norm(u))<tol_u):
+        if (norm_r<tol_r) or ((norm_u/np.linalg.norm(u))<tol_u):
             break
-        
+    
     return u, udot, uddot
 
 
@@ -297,6 +354,7 @@ def pred_lin(u, udot, uddot, dt, beta, gamma):
         Predicted next-step velocity (time step k+1), ndofs-by-1 Numpy array.
     uddot : double
         Predicted next-step acceleration (time step k+1), ndofs-by-1 Numpy array.
+        Input is output without modification.
 
     """
     u = u + dt*udot + (0.5-beta)*dt**2*uddot
@@ -396,6 +454,8 @@ def dnewmark_lin(K, C, M, f, u, udot, uddot, dt, beta=1.0/6.0, gamma=0.5):
     """
     u, udot, uddot = pred_lin(u, udot, uddot, dt, beta, gamma)
     u, udot, uddot = corr_lin(K, C, M, f, u, udot, uddot, dt, beta, gamma)
+
+
 
     return u, udot, uddot
 
@@ -512,7 +572,7 @@ def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/6.0, gamma=0.5, solver='lin')
     if solver == 'lin':
         solver_fun = dnewmark_lin
         kwargs = {}
-    elif solver == 'lin_alt':
+    elif solver == 'lin_alt':   #BJF
         # This version uses df_k = f_k+1-f_k for each time step, 
         # so needs to redefine f
         solver_fun = dnewmark_lin_alt
@@ -533,7 +593,16 @@ def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/6.0, gamma=0.5, solver='lin')
     return u, udot, uddot
 
 
-def factors(version='linear'):
+def factors_from_alpha(alpha):
+    if alpha>0 or alpha<(-1.0/3.0):
+        raise ValueError('alpha must be in range [-1/3, 0]')
+    
+    gamma = 0.5 * (1-2*alpha)
+    beta = 0.25 * (1-alpha)**2
+    return dict(beta=beta, gamma=gamma)
+
+
+def factors(version='linear', alpha=0.0):
     """ Gamma and beta factors for Newmark.
     
     Parameters:
@@ -556,5 +625,5 @@ def factors(version='linear'):
 
     beta = factors[version]['beta']
     gamma = factors[version]['gamma']
-    return beta, gamma
+    return dict(beta=beta, gamma=gamma)
         

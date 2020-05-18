@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.linalg import null_space as null
 
 #%% General functions
 def extract_dofs(mat, dof_ix=[0,1,2], n_dofs=6, axis=0):
@@ -86,7 +87,7 @@ def lagrange_constrain(mat, dof_pairs, null=False):
 
 def lagrange_constrain_from_B(mat, B, null=False):
     # Lagrange multiplier method - expand matrix
-    n_constraints, n_dofs = B.shape        
+    n_constraints = B.shape[0]        
     O = np.zeros([n_constraints, n_constraints])
     mat_fixed = np.vstack([np.hstack([mat, B.T]), np.hstack([B, O])])
    
@@ -123,7 +124,7 @@ def get_phys_modes(phi, B, lambd=None, return_as_ix=False):
     mask1 = np.all((B @ u_)==0, axis=0)
     
     # Equilibrium at interface
-    L = null_space(B)
+    L = null(B)
     g = -B.T @ l_
     mask2 = np.all((L.T @ g)==0, axis=0)
     
