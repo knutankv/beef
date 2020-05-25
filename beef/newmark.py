@@ -5,15 +5,7 @@ Newmark time simulation module
 All functions related to Newmark solutions.
 """
 
-
 import numpy as np
-
-def tester():
-    print('Yes!')
-
-    
-def tester2():
-    print('Yes yes!')
 
 def is_converged(values, tols, scaling=None):
     """
@@ -41,15 +33,20 @@ def is_converged(values, tols, scaling=None):
             
 
     """
-    
+
     if scaling is None:
         scaling = np.ones([len(tols)])
     
     for ix, value in enumerate(values):
-        if (tols[ix] is not None) and (value>tols[ix]*scaling[ix]):
+        if (tols[ix] is not None) and (value>(tols[ix]*scaling[ix])):
             return False
         
     return True
+
+
+def residual(f, f_int, C, M, udot, uddot):
+    return f - (M @ uddot + C @ udot + f_int)
+
 
 def acc_estimate(K, C, M, f, udot, u=None, f_int=None, dt=None, beta=None, gamma=None):
     """
@@ -88,7 +85,7 @@ def acc_estimate(K, C, M, f, udot, u=None, f_int=None, dt=None, beta=None, gamma
 
     """
     
-    if f_int is None:
+    if f_int is None:   # assume linear system/solution
         if u is not None:
             f_int = K @ u
         else:
@@ -126,20 +123,21 @@ def pred(u, udot, uddot, dt):
         (Input uddot is output without modifications)
 
     """
-    u = u + dt*udot + 0.5*dt**2*uddot
+    du = dt*udot + 0.5*dt**2*uddot
+    u = u + du
     udot = udot + dt*uddot
-    
-    return u, udot, uddot
+
+    return u, udot, uddot, du
 
 
-def corr(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
+def corr(r, K, C, M, u, udot, uddot, dt, beta, gamma):
     """
     Corrector step in non-linear Newmark algorithm.
 
     Parameters:
     -----------
-    f_int : double
-        Current internal forces (time step k).
+    r : double
+        Residual forces.
     K : double
         Next-step (tangent) stiffness matrix (time step k+1), 
         ndofs-by-ndofs Numpy array.
@@ -147,8 +145,6 @@ def corr(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
         Damping matrix, ndofs-by-ndofs Numpy array.
     M : double
         Mass matrix, ndofs-by-ndofs Numpy array.
-    f : double
-        Next-step external forces (time step k+1), ndofs-by-1 Numpy array.
     u : double
         Next-step displacement, time step k+1, iteration i, ndofs-by-1 Numpy array.
     udot : double
@@ -176,7 +172,6 @@ def corr(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
         Frobenius norm of added displacement
 
     """
-    r = f - (M @ uddot + C @ udot + f_int)  # residual prior to corrector
 
     K_eff = K + (gamma*dt)/(beta*dt**2)*C + 1/(beta*dt**2)*M
     du = np.linalg.solve(K_eff, r)
@@ -185,20 +180,17 @@ def corr(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
     udot = udot + gamma*dt/(beta*dt**2)*du
     uddot = uddot + 1/(beta*dt**2)*du    
 
-    norm_r = np.linalg.norm(f - (M @ uddot + C @ udot + f_int))
-    norm_u = np.linalg.norm(du)
-
-    return u, udot, uddot, norm_r, norm_u
+    return u, udot, uddot, du
                 
 
-def corr_alt(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
+def corr_alt(r, K, C, M, u, udot, uddot, dt, beta, gamma):
     """
     Corrector step in non-linear Newmark algorithm. Alternative version - uses Meff rather than Keff.
 
     Parameters:
     -----------
-    f_int : double
-        Current internal forces (time step k).
+    r : double
+        Residual forces.
     K : double
         Next-step (tangent) stiffness matrix (time step k+1), 
         ndofs-by-ndofs Numpy array.
@@ -206,8 +198,6 @@ def corr_alt(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
         Damping matrix, ndofs-by-ndofs Numpy array.
     M : double
         Mass matrix, ndofs-by-ndofs Numpy array.
-    f : double
-        Next-step external forces (time step k+1), ndofs-by-1 Numpy array.
     u : double
         Next-step displacement, time step k+1, iteration i, ndofs-by-1 Numpy array.
     udot : double
@@ -235,7 +225,6 @@ def corr_alt(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
         Frobenius norm of added displacement
 
     """
-    r = f - (M @ uddot + C @ udot + f_int)  # residual prior to corrector
     Meff = M + C*gamma*dt + K*beta*dt**2
     duddot = np.linalg.solve(Meff, r)
     
@@ -244,17 +233,16 @@ def corr_alt(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma):
     
     du = duddot * beta*dt**2
     u = u + du
-    
-    norm_r = np.linalg.norm(f - (M @ uddot + C @ udot + f_int))
-    norm_u = np.linalg.norm(du)
-    
-    return u, udot, uddot, norm_r, norm_u
+   
+    return u, udot, uddot, du
+
 
 def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/6.0, gamma=0.5, 
              tol_u=1e-8, tol_r=1e-6, itmax=100):
     """
     Combined stepwise non-linear Newmark (predictor-corrector), 
-        based on Algorithm 9.2 in Krenk, 2009. 
+        based on Algorithm 9.2 in Krenk, 2009. Because f_int is not updated each iteration
+        this is equivalent to modified NR iteration.
 
     Parameters:
     -----------
@@ -283,7 +271,7 @@ def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/6.0, gamma=0.5
     gamma : 0.5, double
         Scalar value specifying the gamma parameter.
     tol_u : 1e-8, double
-        Convergence satisfied when |du_{k+1}|/|u_{k}| < tol_u.
+        Convergence satisfied when |du_{k+1}| < tol_u.
     tol_r : 1e-6, double
         Convergence satisfied when |dr_{k+1}| < tol_r.
     itmax : 100, int
@@ -308,20 +296,33 @@ def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/6.0, gamma=0.5
     --------------
     Because predictor and corrector steps are both included, 
     only modified Newton-Raphson is possible (can't update tangent stiffness 
-    each iteration). Use newmark.pred and newmark.corr separately for full
-    Newton-Raphson.
+    each iteration), because that would require updating model and reassembly of system. 
+    Use newmark.pred and newmark.corr separately for full non-linear Newton-Raphson.
 
     """
-    
-    u, udot, uddot = pred(u, udot, uddot, dt)
-     
+
+    # If no internal stiffness force is provided, assume linear system => f_int = K u
     if f_int is None:
         f_int = K @ u
-        
-    for it in range(itmax):
-        u, udot, uddot, norm_r, norm_u = corr(f_int, K, C, M, f, u, udot, uddot, dt, beta, gamma)
 
-        if (norm_r<tol_r) or ((norm_u/np.linalg.norm(u))<tol_u):
+    # Predictor step and initial residual calc
+    u, udot, uddot, du = pred(u, udot, uddot, dt)   
+    f_int += K @ du
+    r = residual(f, f_int, C, M, udot, uddot)
+
+    # Loop through iterations until convergence is met
+    for it in range(itmax):
+        # Corrector step
+        u, udot, uddot, du = corr(r, K, C, M, u, udot, uddot, dt, beta, gamma)
+        
+        # Update internal forces and calculate residual
+        f_int += K @ du
+        r = residual(f, f_int, C, M, udot, uddot)
+
+        # Check convergence and break if convergence is met
+        converged = is_converged([np.linalg.norm(du), np.linalg.norm(r)], 
+                            [tol_u, tol_r])
+        if converged:
             break
     
     return u, udot, uddot
@@ -357,10 +358,11 @@ def pred_lin(u, udot, uddot, dt, beta, gamma):
         Input is output without modification.
 
     """
-    u = u + dt*udot + (0.5-beta)*dt**2*uddot
+    du = dt*udot + (0.5-beta)*dt**2*uddot
+    u = u + du
     udot = udot + (1-gamma)*dt*uddot    
     
-    return u, udot, uddot
+    return u, udot, uddot, du
 
 
 def corr_lin(K, C, M, f, u, udot, uddot, dt, beta, gamma):
@@ -404,9 +406,10 @@ def corr_lin(K, C, M, f, u, udot, uddot, dt, beta, gamma):
     M_eff = M + gamma*dt*C + beta*dt**2*K
     uddot = acc_estimate(K, C, M_eff, f, udot, u=u)
     udot = udot + gamma*dt*uddot
-    u = u + beta*dt**2*uddot
+    du = beta*dt**2*uddot
+    u = u + du
         
-    return u, udot, uddot
+    return u, udot, uddot, du
 
 
 def dnewmark_lin(K, C, M, f, u, udot, uddot, dt, beta=1.0/6.0, gamma=0.5):
@@ -452,10 +455,8 @@ def dnewmark_lin(K, C, M, f, u, udot, uddot, dt, beta=1.0/6.0, gamma=0.5):
     :cite:`Krenk2009` 
 
     """
-    u, udot, uddot = pred_lin(u, udot, uddot, dt, beta, gamma)
-    u, udot, uddot = corr_lin(K, C, M, f, u, udot, uddot, dt, beta, gamma)
-
-
+    u, udot, uddot, __ = pred_lin(u, udot, uddot, dt, beta, gamma)
+    u, udot, uddot, __ = corr_lin(K, C, M, f, u, udot, uddot, dt, beta, gamma)
 
     return u, udot, uddot
 
@@ -570,25 +571,25 @@ def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/6.0, gamma=0.5, solver='lin')
     
     # Prepare for different solver types
     if solver == 'lin':
-        solver_fun = dnewmark_lin
+        dnmrk_fun = dnewmark_lin
         kwargs = {}
     elif solver == 'lin_alt':   #BJF
         # This version uses df_k = f_k+1-f_k for each time step, 
         # so needs to redefine f
-        solver_fun = dnewmark_lin_alt
+        dnmrk_fun = dnewmark_lin_alt
         f = np.diff(f, axis=1)
         f = np.insert(f, 0, f[:,0]*0, axis=1)
         kwargs = {}
         uddot[:, 0] = uddot[:, 0]*0     #remove initial acceleration estimate
     elif solver == 'nonlin':
-        solver_fun = dnewmark
+        dnmrk_fun = dnewmark
         kwargs = {'itmax': 1}
-    
+
     # Loop through all time steps
     n_samples = f.shape[1]    
     for k in range(n_samples-1):
         dt = t[k+1] - t[k]
-        u[:, k+1], udot[:, k+1], uddot[:, k+1] = solver_fun(K, C, M, f[:, k+1], u[:, k], udot[:, k], uddot[:, k], dt, beta=beta, gamma=gamma, **kwargs)
+        u[:, k+1], udot[:, k+1], uddot[:, k+1] = dnmrk_fun(K, C, M, f[:, k+1], u[:, k], udot[:, k], uddot[:, k], dt, beta=beta, gamma=gamma, **kwargs)
 
     return u, udot, uddot
 
@@ -602,7 +603,7 @@ def factors_from_alpha(alpha):
     return dict(beta=beta, gamma=gamma)
 
 
-def factors(version='linear', alpha=0.0):
+def factors(version='linear'):
     """ Gamma and beta factors for Newmark.
     
     Parameters:
@@ -621,7 +622,8 @@ def factors(version='linear', alpha=0.0):
     factors = {'average': {'beta': 0.25, 'gamma': 0.5},
                'constant': {'beta': 0.25, 'gamma': 0.5},
                'linear': {'beta': 1.0/6.0, 'gamma': 0.5},
-               'fox-goodwin': {'beta': 1.0/12.0, 'gamma':0.5}}
+               'fox-goodwin': {'beta': 1.0/12.0, 'gamma':0.5},
+               'explicit': {'beta': 0, 'gamma': 0.5}}
 
     beta = factors[version]['beta']
     gamma = factors[version]['gamma']
