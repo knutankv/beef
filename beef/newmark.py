@@ -624,8 +624,6 @@ def factors(version='linear'):
                'linear': {'beta': 1.0/6.0, 'gamma': 0.5},
                'fox-goodwin': {'beta': 1.0/12.0, 'gamma':0.5},
                'explicit': {'beta': 0, 'gamma': 0.5}}
-
-    beta = factors[version]['beta']
-    gamma = factors[version]['gamma']
-    return dict(beta=beta, gamma=gamma)
+               
+    return factors[version]
         
