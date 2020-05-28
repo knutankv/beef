@@ -48,6 +48,18 @@ def residual(f, f_int, C, M, udot, uddot):
     return f - (M @ uddot + C @ udot + f_int)
 
 
+# def residual_hht(f, f_prev, f_int, f_int_prev, C, M, u_prev, udot, udot_prev, uddot, uddot_prev, alpha, gamma, beta):
+#     u_tilde = u_prev + udot_prev*dt + uddot_prev*(0.5-beta)*dt**2
+#     udot_tilde = udot_prev + uddot_prev*(1-gamma)*dt
+#     r = (1+alpha)*f - alpha*f_prev - (1+alpha)*f_int + alpha*f_int_prev - (1+alpha)*C @ udot_tilde + alpha*C*udot_prev + 
+
+#     return None
+
+
+def effective_mass(M, C, K, dt, gamma, beta, alpha):
+    Meff = M + C*gamma*dt*(1+alpha) + K*beta*dt**2*(1+alpha)
+
+
 def acc_estimate(K, C, M, f, udot, u=None, f_int=None, dt=None, beta=None, gamma=None):
     """
     Predict acceleration for time integration, based on internal forces, 
@@ -183,9 +195,9 @@ def corr(r, K, C, M, u, udot, uddot, dt, beta, gamma):
     return u, udot, uddot, du
                 
 
-def corr_alt(r, K, C, M, u, udot, uddot, dt, beta, gamma):
+def corr_hht(f, f_prev, f_int, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=0.0):
     """
-    Corrector step in non-linear Newmark algorithm. Alternative version - uses Meff rather than Keff.
+    Corrector step in non-linear Newmark algorithm. Alternative version - uses Meff rather than Keff and allows for alpha damping.
 
     Parameters:
     -----------
@@ -225,7 +237,7 @@ def corr_alt(r, K, C, M, u, udot, uddot, dt, beta, gamma):
         Frobenius norm of added displacement
 
     """
-    Meff = M + C*gamma*dt + K*beta*dt**2
+    Meff = effective_mass(M, C, K, dt, gamma, beta, alpha)
     duddot = np.linalg.solve(Meff, r)
     
     uddot = uddot + duddot
@@ -314,6 +326,136 @@ def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/6.0, gamma=0.5
     for it in range(itmax):
         # Corrector step
         u, udot, uddot, du = corr(r, K, C, M, u, udot, uddot, dt, beta, gamma)
+        
+        # Update internal forces and calculate residual
+        f_int += K @ du
+        r = residual(f, f_int, C, M, udot, uddot)
+
+        # Check convergence and break if convergence is met
+        converged = is_converged([np.linalg.norm(du), np.linalg.norm(r)], 
+                            [tol_u, tol_r])
+        if converged:
+            break
+    
+    return u, udot, uddot
+
+
+def pred_hht(u, udot, uddot, dt, beta, gamma):
+    """
+    Predictor step in linear Newmark algorithm.
+
+    Parameters:
+    -----------
+    u : double
+        Current displacement (time step k), ndofs-by-1 Numpy array.
+    udot : double
+        Current velocity (time step k), ndofs-by-1 Numpy array.
+    uddot : double
+        Current acceleration (time step k), ndofs-by-1 Numpy array.
+    dt : double
+        Current time step, from k to k+1.
+    beta : double
+        Scalar value specifying the beta parameter. 
+    gamma : double
+        Scalar value specifying the gamma parameter.
+
+    Returns:
+    -----------
+    u : double
+        Predicted next-step displacement (time step k+1), ndofs-by-1 Numpy array.
+    udot : double
+        Predicted next-step velocity (time step k+1), ndofs-by-1 Numpy array.
+    uddot : double
+        Predicted next-step acceleration (time step k+1), ndofs-by-1 Numpy array.
+        Input is output without modification.
+
+    """
+    du = dt*udot + (0.5-beta)*dt**2*uddot
+    u = u + du
+    udot = udot + (1-gamma)*dt*uddot    
+    uddot = 0*uddot
+    
+    return u, udot, uddot, du
+
+
+def dnewmark_hht(K, C, M, f, f_prev, u, udot, uddot, dt, f_int=None, beta=1.0/6.0, gamma=0.5, alpha=0.0, 
+             tol_u=1e-8, tol_r=1e-6, itmax=100):
+    """
+    Incremental formulation of Newmark allowing for alpha-damping.
+
+    Parameters:
+    -----------
+    K : double
+        Next-step (tangent) stiffness matrix (time step k+1), 
+        ndofs-by-ndofs Numpy array.
+    C : double
+        Damping matrix, ndofs-by-ndofs Numpy array.
+    M : double
+        Mass matrix, ndofs-by-ndofs Numpy array.
+    f : double
+        Next-step external forces (time step k+1), ndofs-by-1 Numpy array.
+    u : double
+        Next-step displacement, time step k+1, iteration i, ndofs-by-1 Numpy array.
+    udot : double
+        Next-step velocity, time step k+1, iteration i, ndofs-by-1 Numpy array.
+    uddot : double
+        Next-step acceleration, time step k+1, iteration i, ndofs-by-1 Numpy array.
+    dt : double
+        Current time step, from k to k+1.
+    f_int : optional, double
+        Current internal forces (time step k). Equal K @ u if not given, 
+        ndofs-by-1 Numpy array.
+    beta : 1/6, double
+        Scalar value specifying the beta parameter. 
+    gamma : 0.5, double
+        Scalar value specifying the gamma parameter.
+    tol_u : 1e-8, double
+        Convergence satisfied when |du_{k+1}| < tol_u.
+    tol_r : 1e-6, double
+        Convergence satisfied when |dr_{k+1}| < tol_r.
+    itmax : 100, int
+        Maximum number of iterations allowed per time step / increment.
+        
+
+    Returns:
+    -----------
+    u : double
+        Predicted displacement at time step k+1, ndofs-by-1 Numpy array.
+    udot : double
+        Predicted velocity at time step k+1, ndofs-by-1 Numpy array.
+    uddot : double
+        Predicted acceleration at time step k+1, ndofs-by-1 Numpy array.
+        
+        
+    References:
+    --------------------
+    Elena Chatzi, presentation.
+    
+    Other:
+    --------------
+    Because predictor and corrector steps are both included, 
+    only modified Newton-Raphson is possible (can't update tangent stiffness 
+    each iteration), because that would require updating model and reassembly of system. 
+    Use newmark.pred and newmark.corr separately for full non-linear Newton-Raphson.
+
+    """
+    uprev = 1.0*u
+    udotprev = 1.0*udot
+    uddotprev = 1.0*uddot
+
+    # If no internal stiffness force is provided, assume linear system => f_int = K u
+    if f_int is None:
+        f_int = K @ u
+
+    # Predictor step and initial residual calc
+    u, udot, uddot, du = pred_hht(u, udot, uddot, dt, beta, gamma)   
+    f_int += K @ du
+    r = residual(f, f_int, C, M, udot, uddot)
+
+    # Loop through iterations until convergence is met
+    for it in range(itmax):
+        # Corrector step
+        u, udot, uddot, du = corr_hht(r, K, C, M, u, udot, uddot, dt, beta, gamma)
         
         # Update internal forces and calculate residual
         f_int += K @ du

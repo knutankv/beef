@@ -6,13 +6,12 @@ def extract_dofs(mat, dof_ix=[0,1,2], n_dofs=6, axis=0):
     get_dofs = np.vstack([np.arange(dof, mat.shape[axis],n_dofs) for dof in dof_ix]).T.flatten()
     return mat.take(get_dofs, axis=axis)
 
-def convert_dofs(dofs_in, sort_output=True):
-    if dofs_in == 'all':
-        dofs_out = np.arange(0,6)
-    elif dofs_in == 'trans' or dofs_in == 'translation':
-        dofs_out = np.arange(0,3)
-    elif dofs_in == 'rot' or dofs_in == 'rotation':
-        dofs_out = np.arange(3,6)
+def convert_dofs(dofs_in, node_type='beam3d', sort_output=True):
+    dof_translate = dict(beam2d=dict(all=np.arange(0,3), trans=np.arange(0,2), rot=np.arange(2,3)), 
+                        beam3d=dict(all=np.arange(0,6), trans=np.arange(0,3), rot=np.arange(3,6)))
+
+    if dofs_in in ['all', 'trans', 'rot']:
+        dofs_out = dof_translate[node_type][dofs_in]
     else:
         dofs_out = dofs_in
         
@@ -22,7 +21,7 @@ def convert_dofs(dofs_in, sort_output=True):
     return dofs_out
         
 
-def convert_dofs_list(dofs_list_in, n_nodes, sort_output=True):
+def convert_dofs_list(dofs_list_in, n_nodes, node_type='beam3d', sort_output=True):
     contains_strings = np.any([type(d) is str for d in dofs_list_in])
     
     if type(dofs_list_in) is not list:  # single input (all, rot or trans)
@@ -35,7 +34,7 @@ def convert_dofs_list(dofs_list_in, n_nodes, sort_output=True):
         dofs_list_out = dofs_list_in
         
     for ix, dofs_list_out_i in enumerate(dofs_list_out):
-        dofs_list_out[ix] = convert_dofs(dofs_list_out_i, sort_output=sort_output)
+        dofs_list_out[ix] = convert_dofs(dofs_list_out_i, node_type=node_type, sort_output=sort_output)
     
     return dofs_list_out
 
@@ -55,6 +54,62 @@ def transform_unit(e1, e2p):
     T = np.vstack([e1,e2,e3])
     
     return T
+
+
+def gdof_from_nodedof(node_ix, dof_ixs, n_dofs=3, merge=True):
+    gdof_ix = []
+    
+    if type(node_ix) is not list:
+        node_ix = [node_ix]
+    
+    if type(dof_ixs) is not list:
+        dof_ixs = [dof_ixs]*len(node_ix)
+        
+    elif len(dof_ixs) != len(node_ix):
+        dof_ixs = [dof_ixs]*len(node_ix)
+    
+    for ix, n in enumerate(node_ix):
+        gdof_ix.append(n*n_dofs + np.array(dof_ixs[ix]))
+    
+    if merge:
+        gdof_ix = np.array(gdof_ix).flatten()
+        
+    return gdof_ix
+
+def B_to_dofpairs(B, master_val=1):
+    n_constr, n_dofs = B.shape
+    dof_pairs = [None]*n_constr
+    
+    for icon in range(0, n_constr):
+        master = np.where(B[icon,:] == master_val)[0][0]
+        slave = np.where(B[icon,:] == -master_val)[0]
+        if len(slave) != 0:
+            slave = slave[0]
+        else:
+            slave = None
+        
+        dof_pairs[icon] = [master, slave]
+        dof_pairs = np.array(dof_pairs).T
+
+    return dof_pairs
+
+
+def dof_pairs_to_Linv(dof_pairs, n_dofs):    
+    # u_constr = Linv @ u_full (u_full: all DOFs, u_constr are unique,free DOFs)
+    
+    slave_nodes = dof_pairs[dof_pairs[:,1]!=None, 1]
+    grounded_nodes = dof_pairs[dof_pairs[:,1]==None, 0]
+    
+    remove = np.unique(np.hstack([grounded_nodes, slave_nodes]))   
+    all_dofs = np.arange(0,n_dofs)
+    primal_dofs = np.setdiff1d(all_dofs, remove)
+    
+    Linv = np.zeros([len(primal_dofs), n_dofs])
+
+    for primal_dof_ix, primal_dof in enumerate(primal_dofs):
+        Linv[primal_dof_ix, primal_dof] = 1
+    
+    return Linv
 
 
 def compatibility_matrix(dof_pairs, n_dofs):
