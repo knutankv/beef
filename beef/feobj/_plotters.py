@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 from mpl_toolkits.mplot3d import Axes3D
-from ._base import *
+from .plot import *
 
 def equal_3d(ax=plt.gca()):
      x_lims = np.array(ax.get_xlim())

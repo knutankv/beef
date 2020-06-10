@@ -57,3 +57,22 @@ def plot_elements(elements, color='Gray', plot_nodes=False, highlighted_nodes=No
     if node_labels:
         for node in nodes:
             ax.text(node.coordinates[0], node.coordinates[1], node.coordinates[2], node.label, **l_n_dict)
+
+
+    
+
+def frame_creator(frames=30, repeats=1, swing=False, full_cycle=False):
+    
+    if full_cycle:
+        d = 2/frames
+        start = -1
+    else:
+        d = 1/frames
+        start = 0
+    
+    if swing:
+        base_scaling = np.hstack([np.linspace(start,1-d,frames), np.linspace(1,start+d,frames)])
+    else:
+        base_scaling = np.linspace(start,1-d,frames) 
+
+    return np.tile(base_scaling, repeats)

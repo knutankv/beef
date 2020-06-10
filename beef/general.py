@@ -56,6 +56,17 @@ def transform_unit(e1, e2p):
     return T
 
 
+def gdof_ix_from_nodelabels(all_node_labels, node_labels, dof_ix=[0,1,2]):     # from nlfe - not debugged
+    
+    if type(node_labels) is not list:
+        node_labels = [node_labels]
+        
+    node_ix = [np.where(nl==all_node_labels)[0] for nl in node_labels]
+    gdof_ix = gdof_from_nodedof(node_ix, dof_ix)
+    
+    return gdof_ix
+
+
 def gdof_from_nodedof(node_ix, dof_ixs, n_dofs=3, merge=True):
     gdof_ix = []
     
@@ -218,23 +229,6 @@ def ensure_list(list_in, levels=1, increase_only=True):
             dimensions = dimensions + 1
     
         return list_out
-    
-
-def frame_creator(frames=30, repeats=1, swing=False, full_cycle=False):
-    
-    if full_cycle:
-        d = 2/frames
-        start = -1
-    else:
-        d = 1/frames
-        start = 0
-    
-    if swing:
-        base_scaling = np.hstack([np.linspace(start,1-d,frames), np.linspace(1,start+d,frames)])
-    else:
-        base_scaling = np.linspace(start,1-d,frames) 
-
-    return np.tile(base_scaling, repeats)
 
 
 def feature_matrix(master_dofs, values, slave_dofs=None, ndofs=None, return_small=False):
