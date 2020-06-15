@@ -266,5 +266,6 @@ def feature_matrix(master_dofs, values, slave_dofs=None, ndofs=None, return_smal
         
         return large
 
-
+def basic_coupled():
+    return np.array([[1, -1], [-1, 1]])
 

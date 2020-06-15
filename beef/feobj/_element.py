@@ -4,11 +4,12 @@ from . import *
 import numpy as np
 
 class Element:
-    def __init__(self, nodes, label=None, section=Section(), dofs_per_node=None):
+    def __init__(self, nodes, label=None, section=Section(), dofs_per_node=None, domain='3d'):
         self.section = section
         self.nodes = nodes
         self.label = int(label)
-        self.dofs_per_node = dofs_per_node        
+        self.dofs_per_node = dofs_per_node      
+        self.domain = domain  
 
     def tmat(self, reps=None):
         if reps is None:

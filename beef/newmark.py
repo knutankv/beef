@@ -6,6 +6,7 @@ All functions related to Newmark solutions.
 """
 
 import numpy as np
+from scipy.linalg import solve
 
 def is_converged(values, tols, scaling=None):
     """
@@ -103,7 +104,7 @@ def acc_estimate(K, C, M, f, udot, u=None, f_int=None, dt=None, beta=None, gamma
         else:
             raise ValueError('Input either f_int or u!')
 
-    acc = np.linalg.solve(M, f - C @ udot - f_int)
+    acc = solve(M, f - C @ udot - f_int)
 
     return acc
 
@@ -186,7 +187,7 @@ def corr(r, K, C, M, u, udot, uddot, dt, beta, gamma):
     """
 
     K_eff = K + (gamma*dt)/(beta*dt**2)*C + 1/(beta*dt**2)*M
-    du = np.linalg.solve(K_eff, r)
+    du = solve(K_eff, r)
     
     u = u + du
     udot = udot + gamma*dt/(beta*dt**2)*du
@@ -238,7 +239,7 @@ def corr_hht(f, f_prev, f_int, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=0
 
     """
     Meff = effective_mass(M, C, K, dt, gamma, beta, alpha)
-    duddot = np.linalg.solve(Meff, r)
+    duddot = solve(Meff, r)
     
     uddot = uddot + duddot
     udot = udot + duddot*gamma*dt
@@ -649,7 +650,7 @@ def dnewmark_lin_alt(K, C, M, df, u, udot, uddot, dt, beta=1.0/6.0, gamma=0.5):
 
     df_hat = df + a @ udot + b @ uddot
 
-    du = np.linalg.solve(K_eff, df_hat)
+    du = solve(K_eff, df_hat)
     
     dudot = gamma/(beta*dt)*du - gamma/beta*udot + dt*(1-gamma/(2*beta))*uddot
     duddot = 1/(beta*dt**2)*du - 1/(beta*dt)*udot - 1/(2*beta)*uddot

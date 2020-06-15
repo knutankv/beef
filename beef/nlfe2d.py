@@ -8,7 +8,7 @@ import sys
 
 # Corotated UL Beam FE
 import numpy as np
-from scipy.linalg import block_diag, null_space as null
+from scipy.linalg import block_diag, null_space as null, solve
 import matplotlib.pyplot as plt
 from copy import deepcopy as copy
 import pdb
@@ -21,7 +21,7 @@ else:
 from knutils.tools import print_progress as pprogress, clear_progress
 from beef import newmark
 from beef.newmark import is_converged
-from beef import gdof_from_nodedof, compatibility_matrix, B_to_dofpairs, dof_pairs_to_Linv, lagrange_constrain, convert_dofs, convert_dofs_list, ensure_list, gdof_ix_from_nodelabels
+from beef import gdof_from_nodedof, compatibility_matrix, B_to_dofpairs, dof_pairs_to_Linv, lagrange_constrain, convert_dofs, convert_dofs_list, ensure_list, gdof_ix_from_nodelabels, basic_coupled
 from scipy.interpolate import interp1d
 
 
@@ -184,7 +184,7 @@ class Analysis:
         # Initial system matrices
         K = L.T @ self.part.k @ L
         M = L.T @ self.part.m @ L
-        C = self.rayleigh['stiffness']*K + self.rayleigh['mass']*M        
+        C = L.T @ self.part.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M     
         
         # Get first force vector and estimate initial acceleration
         f = L.T @ self.get_global_forces(0)  #initial force, f0        
@@ -214,7 +214,7 @@ class Analysis:
             # Calculate internal forces and residual force
             f_int = L.T @ self.part.q
             K = L.T @ self.part.k @ L
-            C = self.rayleigh['stiffness']*K + self.rayleigh['mass']*M 
+            C = L.T @ self.part.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M
             r = newmark.residual(f, f_int, C, M, udot, uddot)
 
             # Iterations for each load increment 
@@ -238,7 +238,7 @@ class Analysis:
                 
                 # Assemble tangent stiffness, and damping matrices
                 K = L.T @ self.part.k @ L
-                C = self.rayleigh['stiffness']*K + self.rayleigh['mass']*M 
+                C = L.T @ self.part.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M 
             
             self.u[:, k+1] = L @ u    # save to analysis time history
 
@@ -268,7 +268,7 @@ class Analysis:
         # System matrices and forces
         K = L.T @ self.part.k @ L
         M = L.T @ self.part.m @ L
-        C = self.rayleigh['stiffness']*K + self.rayleigh['mass']*M      
+        C = L.T @ self.part.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M
         f = np.zeros([K.shape[0], n_increments])
         
         for k, tk in enumerate(self.t):    
@@ -318,7 +318,7 @@ class Analysis:
             # Iterations for each load increment 
             for i in range(0, self.itmax):
                 # Iteration, new displacement (NR iteration)
-                du = np.linalg.solve(K, r)
+                du = solve(K, r)
                 u = u + du     # add to u, NR  
                 du_inc = du_inc + du
 
@@ -373,7 +373,7 @@ class Node:
         self.x = self.x0*1
 
 class BeamElement2d:
-    def __init__(self, nodes, label, properties=SectionProperties(), shear_flexible=False, mass_formulation='constitutive_timoshenko'):
+    def __init__(self, nodes, label, properties=SectionProperties(), shear_flexible=False, force_psi=None, mass_formulation='constitutive_timoshenko'):
         self.nodes = nodes
         self.label = int(label)
         self.properties = properties
@@ -381,6 +381,7 @@ class BeamElement2d:
         self.phi0 = self.get_element_angle()
         self.tmat = np.eye(6)
         self.v = np.zeros(3)
+        self.force_psi = force_psi
         self.shear_flexible = shear_flexible
         
         # Assign mass matrix function
@@ -395,7 +396,7 @@ class BeamElement2d:
         elif mass_formulation is 'lumped':
             self.get_local_m = self.local_m_lumped
         
-        self.update_all()     
+        self.update_all()    
         
     def update_all(self):
         self.update_pos()      
@@ -431,14 +432,17 @@ class BeamElement2d:
         self.k = self.tmat.T @ self.get_local_k() @ self.tmat
 
 
-    def get_shear_flexibility(self):     
-        props = self.properties
-        if (self.shear_flexible is False) or (props.G*props.A == 0):
-            phi = 0
+    def get_shear_flexibility(self):  
+        if self.force_psi is None:
+            props = self.properties
+            if (self.shear_flexible is False) or (props.G*props.A == 0):
+                phi = 0
+            else:
+                phi = 12*props.E*props.I/(self.L**2*props.G*props.A)
+                
+            return 1/(1+phi)       
         else:
-            phi = 12*props.E*props.I/(self.L**2*props.G*props.A)
-            
-        return 1/(1+phi)       
+            return self.force_psi
     
         
     def get_cog(self):
@@ -602,68 +606,154 @@ class BeamElement2d:
 
     def update_element_mass(self):
         self.m = self.tmat.T @ self.get_local_m() @ self.tmat
-        
     
-    def extract_load_effect(self, requested_load_effect):
-        if requested_load_effect is 'M':
-            return (self.q[5]-self.q[2])/2
-        elif requested_load_effect is 'V':
-            return (self.q[4]-self.q[1])/2
-        elif requested_load_effect is 'N':
-            return (self.q[3]-self.q[0])/2
+    def get_local_kg(self, N):
+        L = self.L0
+        kg = np.array([
+            [0, 0, 0, 0, 0, 0],
+            [0, 36, 3*L, 0, -36, 3*L],
+            [0, 3*L, 4*L**2, 0, -3*L, -L**2],
+            [0, 0, 0, 0, 0, 0],
+            [0, -36, -3*L, 0, 36, -3*L],
+            [0, 3*L, -L**2, 0, -3*L, 4*L**2]
+        ]) * N/(30*L)
+        return kg
         
+        
+    def get_kg(self, N):
+        return self.tmat.T @ self.get_local_kg(N) @ self.tmat
+    
+    
+    def extract_load_effect(self, load_effect):
+        if load_effect is 'M':
+            return (self.q[5]-self.q[2])/2
+        elif load_effect is 'V':
+            return (self.q[4]-self.q[1])/2
+        elif load_effect is 'N':
+            return (self.q[3]-self.q[0])/2
+
+class Feature:
+    def __init__(self, matrix_type, node_labels, dof_ixs, value, local=False):
+        
+        if len(node_labels) == 1 or node_labels[1]==None:
+            matrix = basic_coupled()[0:1,0:1]*value
+            node_labels = [node_labels[0]]
+            dof_ixs = [dof_ixs[0]]
+        else:
+            matrix = basic_coupled()*value
+        
+        self.type = matrix_type
+        self.node_labels = node_labels
+        self.dof_ixs = dof_ixs
+        self.matrix = matrix
+        self.local = local
+        
+class Spring(Feature):
+    def __init__(self, node_labels, dof_ixs, k):
+        super().__init__('k', node_labels, dof_ixs, k)
+
+class Dashpot(Feature):    
+    def __init__(self, node_labels, dof_ixs, c):
+        super().__init__('c', node_labels, dof_ixs, c)
+
+class PointMass(Feature):    
+    def __init__(self, node_label, dof_ixs, m):
+        super().__init__('m', node_label, dof_ixs, m)
+
+
 class Part:
-    def __init__(self, node_matrix, element_matrix, properties, constraints, constraint_type='primal', shear_flexible=False, mass_formulation='timoshenko'):
+    def __init__(self, node_matrix, element_matrix, properties, constraints, features=None, constraint_type='primal', shear_flexible=False, force_psi=None, mass_formulation='timoshenko'):
+       
+        # Initialization
         n_els = element_matrix.shape[0]
         n_nodes = node_matrix.shape[0]
         self.elements = [None]*n_els
         self.nodes = [None]*n_nodes
-        
         self.node_labels = node_matrix[:,0]
+
+        if node_matrix.shape[1] == 3:
+            self.domain = '2d'
+            z = np.zeros(n_nodes)
+        else:
+            self.domain = '3d'
+            z = node_matrix[:,2]
+
+        # Constraint definitions
         self.constraints = constraints
         self.constraint_type = constraint_type
-        
         self.dof_pairs = self.constraint_dof_ix()
         self.n_constraints = self.dof_pairs.shape[0]
         self.B = compatibility_matrix(self.dof_pairs, len(self.nodes)*3)
         self.L = null(self.B) 
         self.Linv = dof_pairs_to_Linv(self.dof_pairs, len(self.nodes)*3)
-        
+                
+        # Properties treatment (copy properties if not list)
         if type(properties) is not list:
             properties = [properties] * n_els
-            
+
+        # Create node objects    
         for n_ix in range(0, n_nodes):
-            self.nodes[n_ix] = Node(node_matrix[n_ix, 0], node_matrix[n_ix, 1], node_matrix[n_ix, 2])
-        
+            self.nodes[n_ix] = Node(node_matrix[n_ix, 0], node_matrix[n_ix, 1], z[n_ix])
+
+        # Assign global indices to all node objects        
         self.assign_global_ix_to_nodes()
         
-            
+        # Create element objects
         for el_ix in range(0, n_els):
             el_node_labels = element_matrix[el_ix, 1:]
             ix1 = np.where(self.node_labels==el_node_labels[0])[0][0]
             ix2 = np.where(self.node_labels==el_node_labels[1])[0][0]
             
-            self.elements[el_ix] = BeamElement2d([self.nodes[ix1], self.nodes[ix2]], element_matrix[el_ix, 0], properties=properties[el_ix], shear_flexible=shear_flexible, mass_formulation=mass_formulation)
+            self.elements[el_ix] = BeamElement2d([self.nodes[ix1], self.nodes[ix2]], element_matrix[el_ix, 0], properties=properties[el_ix], shear_flexible=shear_flexible, force_psi=force_psi, mass_formulation=mass_formulation)
             
             dof_ix1 = self.node_label_to_dof_ix(el_node_labels[0])
             dof_ix2 = self.node_label_to_dof_ix(el_node_labels[1])
             
             self.elements[el_ix].dof_ix = np.hstack([dof_ix1, dof_ix2])
 
+        # Establish matrices from features
+        if features is None:
+            features = []
+        self.features = features
+        self.feature_mats = self.global_matrices_from_features()
+
+        # Update global matrices and vectors
         self.update_tangent_stiffness()
         self.update_internal_forces()
         self.update_mass_matrix()
+        self.c = self.feature_mats['c']
+
+
+    def global_matrices_from_features(self):
+        n_dofs = np.shape(self.B)[1]
+        feature_mats = dict(k=np.zeros([n_dofs, n_dofs]), 
+                            c=np.zeros([n_dofs, n_dofs]), 
+                            m=np.zeros([n_dofs, n_dofs]))
+
+        for feature in self.features:
+            ixs = np.array([self.node_dof_lookup(node_label, dof_ix) for node_label, dof_ix in zip(feature.node_labels, feature.dof_ixs)])      
+            feature_mats[feature.type][np.ix_(ixs, ixs)] = feature.matrix
+
+        return feature_mats
         
+
+    def node_dof_lookup(self, node_label, dof_ix):
+        return self.nodes[np.where(self.node_labels == node_label)[0][0]].global_dof_ixs[dof_ix]
+
+
     def assign_global_ix_to_nodes(self):
         for node in self.nodes:
             node.global_dof_ixs = self.gdof_ix_from_nodelabels(node.label, dof_ix=[0,1,2])
             
 
-    def update_internal_forces(self):
+    def update_internal_forces(self, u=None):
         node_labels = self.node_labels
         ndim = len(node_labels)*3
-        self.q = np.zeros(ndim)
-        
+        if u is None:
+            u = np.zeros([ndim])
+
+        self.q = self.feature_mats['k'] @ u   
+
         for el_ix, el in enumerate(self.elements):
             node_ix1 = np.where(node_labels == el.nodes[0].label)[0][0]
             node_ix2 = np.where(node_labels == el.nodes[1].label)[0][0]
@@ -671,20 +761,31 @@ class Part:
 
             self.q[ixs] += el.q
     
+    def get_kg(self, N):
+        node_labels = self.node_labels
+        ndim = len(node_labels)*3
+        kg = np.zeros([ndim, ndim])        
+
+        for el_ix, el in enumerate(self.elements):
+            kg[np.ix_(el.dof_ix, el.dof_ix)] += el.get_kg(N)
+
+        return kg   
+
+
     def update_mass_matrix(self):
         node_labels = self.node_labels
         ndim = len(node_labels)*3
-        self.m = np.zeros([ndim, ndim])        
+        self.m = self.feature_mats['m']*1   
 
         for el_ix, el in enumerate(self.elements):
             self.m[np.ix_(el.dof_ix, el.dof_ix)] += el.m
+            
         
-    
     def update_tangent_stiffness(self):
         node_labels = self.node_labels
         ndim = len(node_labels)*3
-        self.k = np.zeros([ndim, ndim])        
-
+        self.k = self.feature_mats['k']*1          
+        
         for el_ix, el in enumerate(self.elements):
             self.k[np.ix_(el.dof_ix, el.dof_ix)] += el.k
 
@@ -706,27 +807,26 @@ class Part:
     
     
     def constraint_dof_ix(self):        
-        if self.constraints is None:
-            raise ValueError("Can't output constraint DOF indices as no constraints are given.")
+            if self.constraints is None:
+                raise ValueError("Can't output constraint DOF indices as no constraints are given.")
+ 
+            c_dof_ix = []
             
-        all_node_labels = self.node_labels()
-        c_dof_ix = []
-        
-        for constraint in self.constraints:   
-            for node_constraint in constraint.node_constraints:
-                dofs = np.array(node_constraint.dof_ix)
-                dof_ixs = self.node_label_to_dof_ix(node_constraint.master_node)[dofs]
-                
-                if node_constraint.slave_node is not None:
-                    conn_dof_ixs = self.node_label_to_dof_ix(node_constraint.slave_node)[dofs]
-                else:
-                    conn_dof_ixs = [None]*len(dof_ixs)
-
-                dof_ixs = np.vstack([dof_ixs, conn_dof_ixs]).T
-                c_dof_ix.append(dof_ixs)
-                
-        c_dof_ix = np.vstack(c_dof_ix)
-        return c_dof_ix
+            for constraint in self.constraints:   
+                for node_constraint in constraint.node_constraints:
+                    dofs = np.array(node_constraint.dof_ix)
+                    dof_ixs = self.gdof_ix_from_nodelabels(node_constraint.master_node)[dofs]
+                    
+                    if node_constraint.slave_node is not None:
+                        conn_dof_ixs = self.gdof_ix_from_nodelabels(node_constraint.slave_node)[dofs]
+                    else:
+                        conn_dof_ixs = [None]*len(dof_ixs)
+    
+                    dof_ixs = np.vstack([dof_ixs, conn_dof_ixs]).T
+                    c_dof_ix.append(dof_ixs)
+                    
+            c_dof_ix = np.vstack(c_dof_ix)
+            return c_dof_ix
     
     
     def plot(self, u=None, color='Gray', plot_nodes=False, node_labels=False, element_labels=False, ax=None):
@@ -774,7 +874,7 @@ class Part:
             element.update_pos() 
             element.update_corot()    
 
-        self.update_internal_forces()  
+        self.update_internal_forces(u)  
     
     
     def deform_part(self, u):
@@ -785,38 +885,16 @@ class Part:
             element.update_all()
             
         self.update_tangent_stiffness()
-        self.update_internal_forces()   
+        self.update_internal_forces(u)   
         self.update_mass_matrix()   
+        
 
 
     def node_from_gdof(self, gdof_ix, n_dofs=3):
         ix = int(np.floor(gdof_ix/n_dofs))
         loc_ix = int(gdof_ix - ix*n_dofs)
         return self.nodes[ix], loc_ix
-    
-
-    def constraint_dof_ix(self):        
-            if self.constraints is None:
-                raise ValueError("Can't output constraint DOF indices as no constraints are given.")
- 
-            c_dof_ix = []
             
-            for constraint in self.constraints:   
-                for node_constraint in constraint.node_constraints:
-                    dofs = np.array(node_constraint.dof_ix)
-                    dof_ixs = self.gdof_ix_from_nodelabels(node_constraint.master_node)[dofs]
-                    
-                    if node_constraint.slave_node is not None:
-                        conn_dof_ixs = self.gdof_ix_from_nodelabels(node_constraint.slave_node)[dofs]
-                    else:
-                        conn_dof_ixs = [None]*len(dof_ixs)
-    
-                    dof_ixs = np.vstack([dof_ixs, conn_dof_ixs]).T
-                    c_dof_ix.append(dof_ixs)
-                    
-            c_dof_ix = np.vstack(c_dof_ix)
-            return c_dof_ix
-        
 #%% Constraint class definition
 class Constraint:
     def __init__(self, master_nodes, slave_nodes=None, dofs='all', relative_to='global'):

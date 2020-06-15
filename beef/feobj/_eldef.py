@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-from . import *
 from ._base import *
 from . import _plotters
 from scipy.linalg import null_space as null
 
 
 class ElDef:
-    def __init__(self, nodes, elements, constraints=None, constraint_type='lagrange'):
+    def __init__(self, nodes, elements, constraints=None, constraint_type='lagrange', domain='3d'):
         self.nodes = nodes
         self.elements = elements
         self.assign_node_dofcounts()
         self.global_matrices = dict()
+        self.domain = domain
         
         # Constraints
         self.constraints = constraints 
@@ -281,6 +281,10 @@ class ElDef:
 
 class Assembly(ElDef):
     def __init__(self, parts, **kwargs):
+        domains = [part.domain for part in parts]
+        if not all([domain==domains[0] for domain in domains]):
+            raise ValueError('Cannot combine parts in different domains. Use either 2d or 3d for all parts!')
+
         super().__init__(self.all_nodes(parts), self.all_elements(parts), **kwargs)
         self.parts = parts        
 
@@ -305,9 +309,14 @@ class Assembly(ElDef):
             
     
 class Part(ElDef):
-    def __init__(self, node_matrix, element_matrix, sections, constraints=None):      
+    def __init__(self, node_matrix, element_matrix, sections, constraints=None**kwargs):      
         nodes, elements = create_nodes_and_elements(node_matrix, element_matrix, sections)
-        super().__init__(nodes, elements, constraints)
+        if node.shape[1] == 3:
+            domain = '2d'
+        elif node.shape[1] == 4:
+            domain = '3d'
+
+        super().__init__(nodes, elements, constraints, domain=domain, **kwargs)
 
 
 def create_nodes(node_matrix):
