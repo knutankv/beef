@@ -8,6 +8,7 @@ All functions related to Newmark solutions.
 import numpy as np
 from scipy.linalg import solve
 
+
 def is_converged(values, tols, scaling=None):
     """
     Check whether multiple values are below specified tolerances.  (value/scaling)
@@ -49,16 +50,12 @@ def residual(f, f_int, C, M, udot, uddot):
     return f - (M @ uddot + C @ udot + f_int)
 
 
-# def residual_hht(f, f_prev, f_int, f_int_prev, C, M, u_prev, udot, udot_prev, uddot, uddot_prev, alpha, gamma, beta):
-#     u_tilde = u_prev + udot_prev*dt + uddot_prev*(0.5-beta)*dt**2
-#     udot_tilde = udot_prev + uddot_prev*(1-gamma)*dt
-#     r = (1+alpha)*f - alpha*f_prev - (1+alpha)*f_int + alpha*f_int_prev - (1+alpha)*C @ udot_tilde + alpha*C*udot_prev + 
-
-#     return None
+def residual_hht(f, f_prev, f_int, f_int_prev, K, C, M, u_prev, udot, udot_prev, uddot, alpha, gamma, beta, dt):
+    return (1+alpha)*f - alpha*f_prev - ((1+alpha)*f_int - alpha*f_int_prev + C @ ((1+alpha)*udot - alpha*udot_prev) + M @ uddot)
 
 
-def effective_mass(M, C, K, dt, gamma, beta, alpha):
-    Meff = M + C*gamma*dt*(1+alpha) + K*beta*dt**2*(1+alpha)
+def effective_mass(M, C, K, dt, gamma, beta, alpha=0.0):
+    return M + C*gamma*dt*(1+alpha) + K*beta*dt**2*(1+alpha)
 
 
 def acc_estimate(K, C, M, f, udot, u=None, f_int=None, dt=None, beta=None, gamma=None):
@@ -196,7 +193,7 @@ def corr(r, K, C, M, u, udot, uddot, dt, beta, gamma):
     return u, udot, uddot, du
                 
 
-def corr_hht(f, f_prev, f_int, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=0.0):
+def corr_alt(r, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=0.0):
     """
     Corrector step in non-linear Newmark algorithm. Alternative version - uses Meff rather than Keff and allows for alpha damping.
 
@@ -250,8 +247,8 @@ def corr_hht(f, f_prev, f_int, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=0
     return u, udot, uddot, du
 
 
-def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/6.0, gamma=0.5, 
-             tol_u=1e-8, tol_r=1e-6, itmax=100):
+def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/4.0, gamma=0.5, 
+             tol_u=1e-5, tol_r=1e-5, itmax=10):
     """
     Combined stepwise non-linear Newmark (predictor-corrector), 
         based on Algorithm 9.2 in Krenk, 2009. Because f_int is not updated each iteration
@@ -279,15 +276,15 @@ def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/6.0, gamma=0.5
     f_int : optional, double
         Current internal forces (time step k). Equal K @ u if not given, 
         ndofs-by-1 Numpy array.
-    beta : 1/6, double
+    beta : 1/4, double
         Scalar value specifying the beta parameter. 
     gamma : 0.5, double
         Scalar value specifying the gamma parameter.
-    tol_u : 1e-8, double
+    tol_u : 1e-5, double
         Convergence satisfied when |du_{k+1}| < tol_u.
-    tol_r : 1e-6, double
+    tol_r : 1e-5, double
         Convergence satisfied when |dr_{k+1}| < tol_r.
-    itmax : 100, int
+    itmax : 10, int
         Maximum number of iterations allowed per time step / increment.
         
 
@@ -339,48 +336,11 @@ def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/6.0, gamma=0.5
             break
     
     return u, udot, uddot
+           
 
 
-def pred_hht(u, udot, uddot, dt, beta, gamma):
-    """
-    Predictor step in linear Newmark algorithm.
-
-    Parameters:
-    -----------
-    u : double
-        Current displacement (time step k), ndofs-by-1 Numpy array.
-    udot : double
-        Current velocity (time step k), ndofs-by-1 Numpy array.
-    uddot : double
-        Current acceleration (time step k), ndofs-by-1 Numpy array.
-    dt : double
-        Current time step, from k to k+1.
-    beta : double
-        Scalar value specifying the beta parameter. 
-    gamma : double
-        Scalar value specifying the gamma parameter.
-
-    Returns:
-    -----------
-    u : double
-        Predicted next-step displacement (time step k+1), ndofs-by-1 Numpy array.
-    udot : double
-        Predicted next-step velocity (time step k+1), ndofs-by-1 Numpy array.
-    uddot : double
-        Predicted next-step acceleration (time step k+1), ndofs-by-1 Numpy array.
-        Input is output without modification.
-
-    """
-    du = dt*udot + (0.5-beta)*dt**2*uddot
-    u = u + du
-    udot = udot + (1-gamma)*dt*uddot    
-    uddot = 0*uddot
-    
-    return u, udot, uddot, du
-
-
-def dnewmark_hht(K, C, M, f, f_prev, u, udot, uddot, dt, f_int=None, beta=1.0/6.0, gamma=0.5, alpha=0.0, 
-             tol_u=1e-8, tol_r=1e-6, itmax=100):
+def dnewmark_hht(K, C, M, f, u, udot, uddot, dt, f_prev, f_int=None, beta=1.0/4.0, gamma=0.5, alpha=0.0, 
+             tol_u=1e-5, tol_r=1e-5, itmax=10):
     """
     Incremental formulation of Newmark allowing for alpha-damping.
 
@@ -406,15 +366,15 @@ def dnewmark_hht(K, C, M, f, f_prev, u, udot, uddot, dt, f_int=None, beta=1.0/6.
     f_int : optional, double
         Current internal forces (time step k). Equal K @ u if not given, 
         ndofs-by-1 Numpy array.
-    beta : 1/6, double
+    beta : 1/4, double
         Scalar value specifying the beta parameter. 
     gamma : 0.5, double
         Scalar value specifying the gamma parameter.
-    tol_u : 1e-8, double
+    tol_u : 1e-5, double
         Convergence satisfied when |du_{k+1}| < tol_u.
-    tol_r : 1e-6, double
+    tol_r : 1e-5, double
         Convergence satisfied when |dr_{k+1}| < tol_r.
-    itmax : 100, int
+    itmax : 10, int
         Maximum number of iterations allowed per time step / increment.
         
 
@@ -440,33 +400,40 @@ def dnewmark_hht(K, C, M, f, f_prev, u, udot, uddot, dt, f_int=None, beta=1.0/6.
     Use newmark.pred and newmark.corr separately for full non-linear Newton-Raphson.
 
     """
-    uprev = 1.0*u
-    udotprev = 1.0*udot
-    uddotprev = 1.0*uddot
 
     # If no internal stiffness force is provided, assume linear system => f_int = K u
     if f_int is None:
         f_int = K @ u
+    
+    # Save current status as previous
+    u_prev = 1.0*u
+    udot_prev = 1.0*udot
+    f_int_prev = 1.0*f_int
 
     # Predictor step and initial residual calc
-    u, udot, uddot, du = pred_hht(u, udot, uddot, dt, beta, gamma)   
+    u, udot, uddot, du = pred(u, udot, uddot, dt)   
     f_int += K @ du
-    r = residual(f, f_int, C, M, udot, uddot)
+    r = residual_hht(f, f_prev, f_int, f_int_prev, K, C, M, u_prev, udot, udot_prev, uddot, alpha, gamma, beta, dt)
 
     # Loop through iterations until convergence is met
     for it in range(itmax):
         # Corrector step
-        u, udot, uddot, du = corr_hht(r, K, C, M, u, udot, uddot, dt, beta, gamma)
-        
+        u, udot, uddot, du = corr_alt(r, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=alpha)
+
         # Update internal forces and calculate residual
-        f_int += K @ du
-        r = residual(f, f_int, C, M, udot, uddot)
+        f_int += K @ du        
+        r = residual_hht(f, f_prev, f_int, f_int_prev, K, C, M, u_prev, udot, udot_prev, uddot, alpha, gamma, beta, dt)
 
         # Check convergence and break if convergence is met
         converged = is_converged([np.linalg.norm(du), np.linalg.norm(r)], 
                             [tol_u, tol_r])
         if converged:
             break
+
+        # Save current status as previous
+        u_prev = 1.0*u
+        udot_prev = 1.0*udot
+        f_int_prev = 1.0*f_int
     
     return u, udot, uddot
 
@@ -546,7 +513,9 @@ def corr_lin(K, C, M, f, u, udot, uddot, dt, beta, gamma):
         Predicted next-step acceleration, time step k+1), ndofs-by-1 Numpy array.
 
     """
-    M_eff = M + gamma*dt*C + beta*dt**2*K
+    
+
+    M_eff = effective_mass(M, C, K, dt, gamma, beta)
     uddot = acc_estimate(K, C, M_eff, f, udot, u=u)
     udot = udot + gamma*dt*uddot
     du = beta*dt**2*uddot
@@ -555,7 +524,7 @@ def corr_lin(K, C, M, f, u, udot, uddot, dt, beta, gamma):
     return u, udot, uddot, du
 
 
-def dnewmark_lin(K, C, M, f, u, udot, uddot, dt, beta=1.0/6.0, gamma=0.5):
+def dnewmark_lin(K, C, M, f, u, udot, uddot, dt, beta=1.0/4.0, gamma=0.5):
     """
     Combined (predictor-corrector) stepwise linear Newmark based on Algorithm 9.1 in Krenk, 2009.
 
@@ -604,7 +573,7 @@ def dnewmark_lin(K, C, M, f, u, udot, uddot, dt, beta=1.0/6.0, gamma=0.5):
     return u, udot, uddot
 
 
-def dnewmark_lin_alt(K, C, M, df, u, udot, uddot, dt, beta=1.0/6.0, gamma=0.5):
+def dnewmark_lin_alt(K, C, M, df, u, udot, uddot, dt, beta=1.0/4.0, gamma=0.5):
     """
     Alternative implementation, stepwise linear Newmark.
 
@@ -626,7 +595,7 @@ def dnewmark_lin_alt(K, C, M, df, u, udot, uddot, dt, beta=1.0/6.0, gamma=0.5):
         Next-step acceleration, time step k+1, iteration i, ndofs-by-1 Numpy array.
     dt : double
         Current time step, from k to k+1.
-    beta : 1.0/6.0, optional
+    beta : 1.0/4.0, optional
         Scalar value specifying the beta parameter. 
     gamma : 0.5, optional
         Scalar value specifying the gamma parameter.
@@ -662,7 +631,7 @@ def dnewmark_lin_alt(K, C, M, df, u, udot, uddot, dt, beta=1.0/6.0, gamma=0.5):
     return u, udot, uddot
 
 
-def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/6.0, gamma=0.5, solver='lin'):
+def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/4.0, gamma=0.5, solver='lin', alpha=0.0):
     """
     Combined linear Newmark (predictor-corrector), full time history.
 
@@ -683,12 +652,14 @@ def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/6.0, gamma=0.5, solver='lin')
         Initial velocity, ndofs-by-1 Numpy array.
     t : double
         Time instances corresponding to f, nsamples long Numpy array.
-    beta : 1/6, optional
+    beta : 1/4, optional
         Scalar value specifying the beta parameter. 
     gamma : 0.5, optional
         Scalar value specifying the gamma parameter.
-    solver : {'lin', 'lin_alt', 'nonlin'}, optional
+    solver : {'lin', 'lin_alt', 'nonlin', 'nonlin_hht'}, optional
         What step-wise solver to enforce each time step. Useful for debugging.
+    alpha : 0.0, optional
+        Only used when 'nonlin_hht' is enforced
     
 
     Returns:
@@ -706,7 +677,9 @@ def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/6.0, gamma=0.5, solver='lin')
     u = f*0
     udot = f*0
     uddot = f*0
-    
+    n_samples = f.shape[1]   
+    args = [[]]*n_samples
+
     # Assign initial conditions
     u[:, 0] = u0
     udot[:, 0] = udot0
@@ -727,12 +700,17 @@ def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/6.0, gamma=0.5, solver='lin')
     elif solver == 'nonlin':
         dnmrk_fun = dnewmark
         kwargs = {'itmax': 1}
+    elif solver == 'nonlin_hht':
+        dnmrk_fun = dnewmark_hht
+        kwargs = {'itmax': 1, 'alpha': alpha}
+
+        for k in range(n_samples):
+            args[k] = [f[:, k]]
 
     # Loop through all time steps
-    n_samples = f.shape[1]    
     for k in range(n_samples-1):
         dt = t[k+1] - t[k]
-        u[:, k+1], udot[:, k+1], uddot[:, k+1] = dnmrk_fun(K, C, M, f[:, k+1], u[:, k], udot[:, k], uddot[:, k], dt, beta=beta, gamma=gamma, **kwargs)
+        u[:, k+1], udot[:, k+1], uddot[:, k+1] = dnmrk_fun(K, C, M, f[:, k+1], u[:, k], udot[:, k], uddot[:, k], dt, beta=beta, gamma=gamma, *args[k], **kwargs)
 
     return u, udot, uddot
 
@@ -743,11 +721,11 @@ def factors_from_alpha(alpha):
     
     gamma = 0.5 * (1-2*alpha)
     beta = 0.25 * (1-alpha)**2
-    return dict(beta=beta, gamma=gamma)
+    return dict(beta=beta, gamma=gamma, alpha=alpha)
 
 
 def factors(version='linear'):
-    """ Gamma and beta factors for Newmark.
+    """ Gamma and beta factors for Newmark. Alpha is also output as zero, for convenience.
     
     Parameters:
     --------------
@@ -760,13 +738,17 @@ def factors(version='linear'):
         Beta factor for Newmark analysis.
     gamma : double
         Gamma factor for Newmark analysis.
+    alpha : double
+        Hard coded to zero for all cases herein
     """
     
-    factors = {'average': {'beta': 0.25, 'gamma': 0.5},
-               'constant': {'beta': 0.25, 'gamma': 0.5},
-               'linear': {'beta': 1.0/6.0, 'gamma': 0.5},
-               'fox-goodwin': {'beta': 1.0/12.0, 'gamma':0.5},
-               'explicit': {'beta': 0, 'gamma': 0.5}}
+    factors = {'average': {'beta': 0.25, 'gamma': 0.5, 'alpha': 0.0},
+               'constant': {'beta': 0.25, 'gamma': 0.5, 'alpha': 0.0},
+               'linear': {'beta': 1.0/6.0, 'gamma': 0.5, 'alpha': 0.0},
+               'fox-goodwin': {'beta': 1.0/12.0, 'gamma':0.5, 'alpha': 0.0},
+               'explicit': {'beta': 0, 'gamma': 0.5, 'alpha': 0.0}}
                
     return factors[version]
-        
+    
+def stable_increment(omega_max, gamma=1/2, beta=1/6):
+    return 1/(omega_max*np.sqrt(gamma*0.5-beta))

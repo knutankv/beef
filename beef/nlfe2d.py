@@ -20,7 +20,7 @@ else:
 
 from knutils.tools import print_progress as pprogress, clear_progress
 from beef import newmark
-from beef.newmark import is_converged
+from beef.newmark import is_converged, factors_from_alpha
 from beef import gdof_from_nodedof, compatibility_matrix, B_to_dofpairs, dof_pairs_to_Linv, lagrange_constrain, convert_dofs, convert_dofs_list, ensure_list, gdof_ix_from_nodelabels, basic_coupled
 from scipy.interpolate import interp1d
 
@@ -129,7 +129,7 @@ class Results:
             
         
 class Analysis:
-    def __init__(self, part, forces, tmax=1, dt=1, itmax=10, tol=None, nr_modified=False, newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'r ':0}, outputs=['u']):
+    def __init__(self, part, forces, tmax=1, dt=1, itmax=10, tol=None, nr_modified=False, newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, outputs=['u'], tol_fun=np.linalg.norm):
         self.part = copy(part)  #create copy of part, avoid messing with original part definition
         self.forces = forces
         self.t = np.arange(0, tmax+dt, dt)
@@ -153,6 +153,7 @@ class Analysis:
         self.nr_modified = nr_modified
         self.rayleigh = rayleigh
         self.outputs = outputs
+        self.tol_fun = tol_fun
 
     
     def get_global_forces(self, t):  
@@ -169,7 +170,7 @@ class Analysis:
         return np.vstack([self.get_global_forces(ti) for ti in t]).T
 
 
-    def run_dynamic(self, print_progress=True):
+    def run_dynamic(self, print_progress=True, return_results=False):
         # Retrieve constant defintions
         L = self.part.L
         n_increments = len(self.t)
@@ -179,7 +180,7 @@ class Analysis:
         udot = self.part.Linv @ np.zeros([len(self.part.nodes)*3])
         self.u = np.ones([len(self.part.nodes)*3, len(self.t)])*np.nan
         self.u[:, 0] = L @ u
-        beta, gamma = self.newmark_factors['beta'], self.newmark_factors['gamma']        
+        beta, gamma, alpha = self.newmark_factors['beta'], self.newmark_factors['gamma'], self.newmark_factors['alpha']
 
         # Initial system matrices
         K = L.T @ self.part.k @ L
@@ -229,9 +230,9 @@ class Analysis:
                 r = newmark.residual(f, f_int, C, M, udot, uddot)  # residual force
 
                 # Check convergence
-                converged = is_converged([np.linalg.norm(du), np.linalg.norm(r)], 
+                converged = is_converged([self.tol_fun(du), self.tol_fun(r)], 
                                          [self.tol['u'], self.tol['r']], 
-                                         scaling=[np.linalg.norm(du_inc), np.linalg.norm(df)])
+                                         scaling=[self.tol_fun(du_inc), self.tol_fun(df)])
 
                 if not self.run_all_iterations and converged:
                     break
@@ -247,7 +248,10 @@ class Analysis:
                 if print_progress:    
                     progress_bar.close()
                 print(f'>> Not converged after {self.itmax} iterations on increment {k+1}. Response from iteration {i+1} saved. \n')
-                return
+                if return_results:
+                    return self.u
+                else:
+                    return
             else:
                 if print_progress:
                     progress_bar.update(1)  # iterate on progress bar (adding 1)
@@ -255,7 +259,11 @@ class Analysis:
         if print_progress:    
             progress_bar.close()
 
-    def run_lin_dynamic(self, print_progress=True, solver='lin'):
+        if return_results:
+            return self.u
+
+
+    def run_lin_dynamic(self, print_progress=True, solver='lin', return_results=False):
         # Retrieve constant defintions
         L = self.part.L
         n_increments = len(self.t)
@@ -263,7 +271,7 @@ class Analysis:
         # Assume at rest - fix later (take last increment form last step when including in BEEF module)       
         u0 = self.part.Linv @ np.zeros([len(self.part.nodes)*3])
         udot0 = self.part.Linv @ np.zeros([len(self.part.nodes)*3])
-        beta, gamma = self.newmark_factors['beta'], self.newmark_factors['gamma']        
+        beta, gamma, alpha = self.newmark_factors['beta'], self.newmark_factors['gamma'], self.newmark_factors['alpha'] 
 
         # System matrices and forces
         K = L.T @ self.part.k @ L
@@ -275,7 +283,7 @@ class Analysis:
             f[:, k] = L.T @ self.get_global_forces(tk)        # also enforce compatibility (L.T @ ...), each increment 
 
         # Run full linear Newmark
-        u, __, __ = newmark.newmark_lin(K, C, M, f, self.t, u0, udot0, beta=beta, gamma=gamma, solver=solver)
+        u, __, __ = newmark.newmark_lin(K, C, M, f, self.t, u0, udot0, beta=beta, gamma=gamma, alpha=alpha, solver=solver)
 
         # Use compatibility relation to assign fixed DOFs as well
         self.u = np.zeros([self.part.k.shape[0], n_increments])
@@ -284,8 +292,12 @@ class Analysis:
 
         # Deform part as end step
         self.part.deform_part(self.u[:,-1])
-        
-    def run_static(self, print_progress=True):
+    
+        if return_results:
+            return self.u
+
+
+    def run_static(self, print_progress=True, return_results=False):
         # Retrieve constant defintions
         L = self.part.L
         n_increments = len(self.t)
@@ -350,6 +362,9 @@ class Analysis:
 
         if print_progress:    
             progress_bar.close()
+
+        if return_results:
+            return self.u
 
         
 class SectionProperties:
@@ -439,7 +454,7 @@ class BeamElement2d:
                 phi = 0
             else:
                 phi = 12*props.E*props.I/(self.L**2*props.G*props.A)
-                
+                print(phi)
             return 1/(1+phi)       
         else:
             return self.force_psi
