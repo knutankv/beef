@@ -631,7 +631,7 @@ def dnewmark_lin_alt(K, C, M, df, u, udot, uddot, dt, beta=1.0/4.0, gamma=0.5):
     return u, udot, uddot
 
 
-def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/4.0, gamma=0.5, solver='lin', alpha=0.0):
+def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/4.0, gamma=0.5, solver='full_hht', alpha=0.0):
     """
     Combined linear Newmark (predictor-corrector), full time history.
 
@@ -656,7 +656,7 @@ def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/4.0, gamma=0.5, solver='lin',
         Scalar value specifying the beta parameter. 
     gamma : 0.5, optional
         Scalar value specifying the gamma parameter.
-    solver : {'lin', 'lin_alt', 'nonlin', 'nonlin_hht'}, optional
+    solver : {'full_hht', 'full', 'lin', 'lin_alt'}, optional
         What step-wise solver to enforce each time step. Useful for debugging.
     alpha : 0.0, optional
         Only used when 'nonlin_hht' is enforced
@@ -697,10 +697,10 @@ def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/4.0, gamma=0.5, solver='lin',
         f = np.insert(f, 0, f[:,0]*0, axis=1)
         kwargs = {}
         uddot[:, 0] = uddot[:, 0]*0     #remove initial acceleration estimate
-    elif solver == 'nonlin':
+    elif solver == 'full':
         dnmrk_fun = dnewmark
         kwargs = {'itmax': 1}
-    elif solver == 'nonlin_hht':
+    elif solver == 'full_hht':
         dnmrk_fun = dnewmark_hht
         kwargs = {'itmax': 1, 'alpha': alpha}
 

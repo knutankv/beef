@@ -188,9 +188,10 @@ class Analysis:
         C = L.T @ self.part.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M     
         
         # Get first force vector and estimate initial acceleration
-        f = L.T @ self.get_global_forces(0)  #initial force, f0        
-        uddot = newmark.acc_estimate(K, C, M, f, udot, f_int=L.T @ self.part.q, beta=beta, gamma=gamma, dt=(self.t[1]-self.t[0]))        
-        
+        f = L.T @ self.get_global_forces(0)  #initial force, f0   
+        f_int_prev = L.T @ self.part.q     
+        uddot = newmark.acc_estimate(K, C, M, f, udot, f_int=f_int_prev, beta=beta, gamma=gamma, dt=(self.t[1]-self.t[0]))        
+
         # Initiate progress bar
         if print_progress:
             progress_bar = tqdm(total=n_increments-1, initial=0, desc='Dynamic analysis')        
@@ -205,6 +206,10 @@ class Analysis:
             f = L.T @ self.get_global_forces(self.t[k+1]) # force in increment k+1
             df = f - f_prev    # force increment
             
+            # Save "previous" values
+            u_prev = 1.0*u
+            udot_prev = 1.0*udot
+
             # Predictor step Newmark
             u, udot, uddot, du = newmark.pred(u, udot, uddot, dt)
 
@@ -216,18 +221,22 @@ class Analysis:
             f_int = L.T @ self.part.q
             K = L.T @ self.part.k @ L
             C = L.T @ self.part.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M
-            r = newmark.residual(f, f_int, C, M, udot, uddot)
+            # r = newmark.residual(f, f_int, C, M, udot, uddot)
+            r = newmark.residual_hht(f, f_prev, f_int, f_int_prev, K, C, M, u_prev, udot, udot_prev, uddot, alpha, gamma, beta, dt)
 
             # Iterations for each load increment 
             for i in range(self.itmax):
                 # Iteration, new displacement (Newton corrector step)
-                u, udot, uddot, du = newmark.corr(r, K, C, M, u, udot, uddot, dt, beta, gamma)
+                # u, udot, uddot, du = newmark.corr(r, K, C, M, u, udot, uddot, dt, beta, gamma)
+                u, udot, uddot, du = newmark.corr_alt(r, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=alpha)
                 du_inc += du
 
                 # Update residual
                 self.part.deform_part(L @ u)    # deform nodes in part given by u => new f_int and K from elements
                 f_int = L.T @ self.part.q       # new internal (stiffness) force 
-                r = newmark.residual(f, f_int, C, M, udot, uddot)  # residual force
+                
+                # r = newmark.residual(f, f_int, C, M, udot, uddot)  # residual force
+                r = newmark.residual_hht(f, f_prev, f_int, f_int_prev, K, C, M, u_prev, udot, udot_prev, uddot, alpha, gamma, beta, dt)
 
                 # Check convergence
                 converged = is_converged([self.tol_fun(du), self.tol_fun(r)], 
@@ -241,6 +250,11 @@ class Analysis:
                 K = L.T @ self.part.k @ L
                 C = L.T @ self.part.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M 
             
+                # Update "previous" step values
+                u_prev = 1.0*u
+                udot_prev = 1.0*udot
+                f_int_prev = 1.0*f_int
+
             self.u[:, k+1] = L @ u    # save to analysis time history
 
             # If all iterations are used
@@ -263,7 +277,7 @@ class Analysis:
             return self.u
 
 
-    def run_lin_dynamic(self, print_progress=True, solver='lin', return_results=False):
+    def run_lin_dynamic(self, print_progress=True, solver='full_hht', return_results=False):
         # Retrieve constant defintions
         L = self.part.L
         n_increments = len(self.t)
