@@ -26,7 +26,7 @@ from scipy.interpolate import interp1d
 
 
 class Force:
-    def __init__(self, amplitudes, node_labels, dof_ix, t=None):
+    def __init__(self, amplitudes, node_labels, dof_ix, t=None, force_type='force'):
         """
         Parameters
         -----------------
@@ -47,6 +47,7 @@ class Force:
         self.dof_ix = self.adjust_dof_ix(dof_ix, len(node_labels))
         amplitudes = self.adjust_amplitudes(amplitudes, len(node_labels))
         self.min_dt = np.inf
+        self.type = force_type
 
         if t is None:
             self.evaluate = lambda __: amplitudes[:, 0]  # output constant force regardless
@@ -94,6 +95,26 @@ class Force:
         return amplitudes
 
 
+class PrescribedDisplacement(Force):
+    def __init__(self, amplitudes, node_labels, dof_ix, t=None):
+        """
+        Parameters
+        -----------------
+        amplitudes : double
+            Numpy array where axis 1 corresponds to the DOFs (same size as nodelabels and dof_ix) and the second axis
+            corresponds to the specified t. 
+
+        Returns
+        ------------------
+
+        Notes
+        --------------------
+        If t is either not given (amplitude assumed constant) or a scalar (amplitude assumed ramped), length of second axis must be 1.
+        """
+
+        super().__init__(amplitudes, node_labels, dof_ix, t=t, force_type='force')
+       
+
 class Results:
     def __init__(self, analysis, element_results=['M', 'N', 'V'], node_results=[]):
         self.analysis = analysis
@@ -129,13 +150,24 @@ class Results:
             
         
 class Analysis:
-    def __init__(self, part, forces, tmax=1, dt=1, itmax=10, tol=None, nr_modified=False, newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, outputs=['u'], tol_fun=np.linalg.norm):
+    def __init__(self, part, forces=None, prescribed_displacements=None, tmax=1, dt=1, itmax=10, tol=None, nr_modified=False, newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, outputs=['u'], tol_fun=np.linalg.norm):
+        if forces is None:
+            forces = []
+        if prescribed_displacements is None:
+            prescribed_displacements = []
+
         self.part = copy(part)  #create copy of part, avoid messing with original part definition
         self.forces = forces
+        self.prescr_disp = prescribed_displacements
         self.t = np.arange(0, tmax+dt, dt)
         self.itmax = itmax
+        self.dof_pairs = np.vstack([self.part.dof_pairs, self.get_dof_pairs_from_prescribed_displacements()])
+        
+        self.B = compatibility_matrix(self.dof_pairs, len(self.part.nodes)*3)
+        self.L = null(self.B) 
+        self.Linv = dof_pairs_to_Linv(self.dof_pairs, len(self.part.nodes)*3)
 
-        min_dt = np.min(np.array([force.min_dt for force in forces]))
+        min_dt = np.min(np.array([force.min_dt for force in self.forces+self.prescr_disp]))
         this_dt = np.diff(self.t)[0]
         if (this_dt-min_dt)>np.finfo(np.float32).eps:
             print(f'A time increment ({this_dt}) larger than the lowest used for force definitions ({min_dt}) is specified. Interpret results with caution!')
@@ -155,7 +187,13 @@ class Analysis:
         self.outputs = outputs
         self.tol_fun = tol_fun
 
-    
+
+    def get_dof_pairs_from_prescribed_displacements(self):
+        prescr_ix = [np.hstack([self.part.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(pd.node_labels, pd.dof_ix)]).flatten() for pd in self.prescr_disp]
+        dof_pairs = np.vstack([[pi, None] for pi in prescr_ix])
+        return dof_pairs
+        
+
     def get_global_forces(self, t):  
         n_dofs = len(self.part.nodes)*3 
         glob_force = np.zeros(n_dofs)
@@ -165,6 +203,21 @@ class Analysis:
         
         return glob_force
 
+    def get_global_prescribed_displacement(self, t):  
+        n_dofs = len(self.part.nodes)*3 
+        glob_displacement = np.zeros(n_dofs)
+        dof_ix_full = []
+        for pd in self.prescr_disp:
+            dof_ix_add = np.hstack([self.part.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(pd.node_labels, pd.dof_ix)]).flatten()
+            glob_displacement[dof_ix_add] += pd.evaluate(t)
+            dof_ix_full.append(dof_ix_add)
+
+        if len(dof_ix_full) != 0:
+            dof_ix_full = np.hstack(dof_ix_full)
+            dof_ix = np.hstack([np.where(self.part.unconstrained_dofs == dof)[0] for dof in dof_ix_full])    # relative to unconstrained dofs
+
+        return glob_displacement[dof_ix_full], dof_ix
+
     
     def get_global_force_history(self, t):
         return np.vstack([self.get_global_forces(ti) for ti in t]).T
@@ -172,12 +225,13 @@ class Analysis:
 
     def run_dynamic(self, print_progress=True, return_results=False):
         # Retrieve constant defintions
-        L = self.part.L
+        L = self.L
+        Linv = self.inv
         n_increments = len(self.t)
 
         # Assume at rest - fix later (take last increment form last step when including in BEEF module)       
-        u = self.part.Linv @ np.zeros([len(self.part.nodes)*3])
-        udot = self.part.Linv @ np.zeros([len(self.part.nodes)*3])
+        u = Linv @ np.zeros([len(self.part.nodes)*3])
+        udot = Linv @ np.zeros([len(self.part.nodes)*3])
         self.u = np.ones([len(self.part.nodes)*3, len(self.t)])*np.nan
         self.u[:, 0] = L @ u
         beta, gamma, alpha = self.newmark_factors['beta'], self.newmark_factors['gamma'], self.newmark_factors['alpha']
@@ -189,6 +243,8 @@ class Analysis:
         
         # Get first force vector and estimate initial acceleration
         f = L.T @ self.get_global_forces(0)  #initial force, f0   
+        prescr_disp, prescr_disp_ix  = self.get_global_prescribed_displacement(0)
+        
         f_int_prev = L.T @ self.part.q     
         uddot = newmark.acc_estimate(K, C, M, f, udot, f_int=f_int_prev, beta=beta, gamma=gamma, dt=(self.t[1]-self.t[0]))        
 
@@ -213,6 +269,11 @@ class Analysis:
             # Predictor step Newmark
             u, udot, uddot, du = newmark.pred(u, udot, uddot, dt)
 
+            # Increment displacement iterator object
+            if len(prescr_disp)>0:   
+                prescr_disp, prescr_disp_ix = self.get_global_prescribed_displacement(self.t[k+1])
+                u[prescr_disp_ix] = prescr_disp   #overwrite prescribed displacements
+
             # Deform part
             self.part.deform_part(L @ u)    # deform nodes in part given by u => new f_int and K from elements
             du_inc = u*0
@@ -221,7 +282,6 @@ class Analysis:
             f_int = L.T @ self.part.q
             K = L.T @ self.part.k @ L
             C = L.T @ self.part.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M
-            # r = newmark.residual(f, f_int, C, M, udot, uddot)
             r = newmark.residual_hht(f, f_prev, f_int, f_int_prev, K, C, M, u_prev, udot, udot_prev, uddot, alpha, gamma, beta, dt)
 
             # Iterations for each load increment 
@@ -229,13 +289,17 @@ class Analysis:
                 # Iteration, new displacement (Newton corrector step)
                 # u, udot, uddot, du = newmark.corr(r, K, C, M, u, udot, uddot, dt, beta, gamma)
                 u, udot, uddot, du = newmark.corr_alt(r, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=alpha)
+
+                if len(prescr_disp)>0:   
+                    u[prescr_disp_ix] = prescr_disp   #overwrite prescribed displacements
+                    du[prescr_disp_ix] = 0
+
                 du_inc += du
 
                 # Update residual
                 self.part.deform_part(L @ u)    # deform nodes in part given by u => new f_int and K from elements
                 f_int = L.T @ self.part.q       # new internal (stiffness) force 
                 
-                # r = newmark.residual(f, f_int, C, M, udot, uddot)  # residual force
                 r = newmark.residual_hht(f, f_prev, f_int, f_int_prev, K, C, M, u_prev, udot, udot_prev, uddot, alpha, gamma, beta, dt)
 
                 # Check convergence
@@ -462,13 +526,12 @@ class BeamElement2d:
 
 
     def get_shear_flexibility(self):  
-        if self.force_psi is None:
+        if not hasattr(self, 'force_psi') or self.force_psi is None:
             props = self.properties
             if (self.shear_flexible is False) or (props.G*props.A == 0):
                 phi = 0
             else:
                 phi = 12*props.E*props.I/(self.L**2*props.G*props.A)
-                print(phi)
             return 1/(1+phi)       
         else:
             return self.force_psi
@@ -715,6 +778,9 @@ class Part:
         self.B = compatibility_matrix(self.dof_pairs, len(self.nodes)*3)
         self.L = null(self.B) 
         self.Linv = dof_pairs_to_Linv(self.dof_pairs, len(self.nodes)*3)
+        
+        self.constrained_dofs = self.dof_pairs[self.dof_pairs[:,1]==None, 0]
+        self.unconstrained_dofs = np.delete(np.arange(0, np.shape(self.B)[1]), self.constrained_dofs)
                 
         # Properties treatment (copy properties if not list)
         if type(properties) is not list:
@@ -781,7 +847,10 @@ class Part:
         if u is None:
             u = np.zeros([ndim])
 
-        self.q = self.feature_mats['k'] @ u   
+        if hasattr(self, 'feature_mats'):
+            self.q = self.feature_mats['k'] @ u   
+        else:
+            self.q = u*0
 
         for el_ix, el in enumerate(self.elements):
             node_ix1 = np.where(node_labels == el.nodes[0].label)[0][0]
