@@ -161,7 +161,9 @@ class Analysis:
         self.prescr_disp = prescribed_displacements
         self.t = np.arange(0, tmax+dt, dt)
         self.itmax = itmax
-        self.dof_pairs = np.vstack([self.part.dof_pairs, self.get_dof_pairs_from_prescribed_displacements()])
+        # Change later:
+        # self.dof_pairs = np.vstack([self.part.dof_pairs, self.get_dof_pairs_from_prescribed_displacements()])
+        self.dof_pairs = self.part.dof_pairs
         
         self.B = compatibility_matrix(self.dof_pairs, len(self.part.nodes)*3)
         self.L = null(self.B) 
@@ -226,7 +228,7 @@ class Analysis:
     def run_dynamic(self, print_progress=True, return_results=False):
         # Retrieve constant defintions
         L = self.L
-        Linv = self.inv
+        Linv = self.Linv
         n_increments = len(self.t)
 
         # Assume at rest - fix later (take last increment form last step when including in BEEF module)       
@@ -243,7 +245,7 @@ class Analysis:
         
         # Get first force vector and estimate initial acceleration
         f = L.T @ self.get_global_forces(0)  #initial force, f0   
-        prescr_disp, prescr_disp_ix  = self.get_global_prescribed_displacement(0)
+        # prescr_disp, prescr_disp_ix  = self.get_global_prescribed_displacement(0)
         
         f_int_prev = L.T @ self.part.q     
         uddot = newmark.acc_estimate(K, C, M, f, udot, f_int=f_int_prev, beta=beta, gamma=gamma, dt=(self.t[1]-self.t[0]))        
@@ -270,9 +272,9 @@ class Analysis:
             u, udot, uddot, du = newmark.pred(u, udot, uddot, dt)
 
             # Increment displacement iterator object
-            if len(prescr_disp)>0:   
-                prescr_disp, prescr_disp_ix = self.get_global_prescribed_displacement(self.t[k+1])
-                u[prescr_disp_ix] = prescr_disp   #overwrite prescribed displacements
+            # if len(prescr_disp)>0:   
+            #     prescr_disp, prescr_disp_ix = self.get_global_prescribed_displacement(self.t[k+1])
+            #     u[prescr_disp_ix] = prescr_disp   #overwrite prescribed displacements
 
             # Deform part
             self.part.deform_part(L @ u)    # deform nodes in part given by u => new f_int and K from elements
@@ -287,12 +289,11 @@ class Analysis:
             # Iterations for each load increment 
             for i in range(self.itmax):
                 # Iteration, new displacement (Newton corrector step)
-                # u, udot, uddot, du = newmark.corr(r, K, C, M, u, udot, uddot, dt, beta, gamma)
                 u, udot, uddot, du = newmark.corr_alt(r, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=alpha)
 
-                if len(prescr_disp)>0:   
-                    u[prescr_disp_ix] = prescr_disp   #overwrite prescribed displacements
-                    du[prescr_disp_ix] = 0
+                # if len(prescr_disp)>0:   
+                #     u[prescr_disp_ix] = prescr_disp   #overwrite prescribed displacements
+                #     du[prescr_disp_ix] = 0
 
                 du_inc += du
 
