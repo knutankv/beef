@@ -1,5 +1,4 @@
 from . import *
-from ._base import *
 
 class EngineeringFeature:
     def __init__(self, master_node, dof_ix, feature_type, slave_node=None, name='engfeature-0'):

@@ -1,5 +1,4 @@
 from . import *
-from ._base import *
 from . import _plotters
 from copy import deepcopy as copy
 
