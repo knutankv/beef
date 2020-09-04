@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Line3DCollection as LC
+
 
 def plot_elements(elements, color='Gray', plot_nodes=False, highlighted_nodes=None, node_labels=False, 
          element_labels=False, fig=None, ax=None, element_settings={},
@@ -26,22 +28,24 @@ def plot_elements(elements, color='Gray', plot_nodes=False, highlighted_nodes=No
         ax = fig.gca(projection='3d')
         ax = fig.gca()
     
-    h = [None]*len(elements)
+    element_lines = [None]*len(elements)
 
     for ix, el in enumerate(elements):
-        xy = np.vstack([node.coordinates for node in el.nodes])
-        h[ix] = plt.plot(xy[:,0], xy[:,1], xy[:,2], **e_dict)[0]
+        element_lines[ix] = np.vstack([node.coordinates for node in el.nodes])
         
-        if plot_nodes:
-            ax.plot(xy[:,0], xy[:,1], xy[:,2], **n_dict)
-            
         if element_labels:
             cog = el.cog
             ax.text(cog[0], cog[1], cog[2], el.label, **l_e_dict)
-        
+    
+    ax.add_collection(LC(element_lines, **e_dict))
+
     nodes = [el.nodes for el in elements]
     nodes = [a for b in nodes for a in b] #flatten
     nodes = list(set(nodes))    #only keep unique
+    
+    if plot_nodes:
+        all_node_coords = np.vstack([node.coordinates for node in nodes])
+        ax.plot(all_node_coords[:,0], all_node_coords[:,1], all_node_coords[:,2], **n_dict)
     
     if highlighted_nodes is not None:
         node_labels = [node.label for node in nodes]
@@ -57,7 +61,6 @@ def plot_elements(elements, color='Gray', plot_nodes=False, highlighted_nodes=No
     if node_labels:
         for node in nodes:
             ax.text(node.coordinates[0], node.coordinates[1], node.coordinates[2], node.label, **l_n_dict)
-
 
     
 
