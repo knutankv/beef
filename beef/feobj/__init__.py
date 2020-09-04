@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 # Import all submodules (splitted for tidyness)
 from ._node import *
 from ._element import *
-from ._base import *
 
 from ._section import *
 from ._constraint import *

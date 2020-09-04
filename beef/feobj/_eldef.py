@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-
 import numpy as np
-from ._base import *
 from . import _plotters
+from ._node import *
+from ._element import *
 from scipy.linalg import null_space as null
-
+from ..general import ensure_list
 
 class ElDef:
     def __init__(self, nodes, elements, constraints=None, constraint_type='lagrange', domain='3d'):
@@ -309,7 +309,7 @@ class Assembly(ElDef):
             
     
 class Part(ElDef):
-    def __init__(self, node_matrix, element_matrix, sections, constraints=None**kwargs):      
+    def __init__(self, node_matrix, element_matrix, sections, constraints=None, **kwargs):      
         nodes, elements = create_nodes_and_elements(node_matrix, element_matrix, sections)
         if node.shape[1] == 3:
             domain = '2d'
