@@ -24,9 +24,8 @@ def plot_elements(elements, color='Gray', plot_nodes=False, highlighted_nodes=No
     if ax is None and fig is None:
         fig = plt.gcf()
             
-    if ax == None:
+    if ax is None:
         ax = fig.gca(projection='3d')
-        ax = fig.gca()
     
     element_lines = [None]*len(elements)
 
