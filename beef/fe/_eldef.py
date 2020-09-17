@@ -3,6 +3,7 @@ import numpy as np
 from . import _plotters
 from ._node import *
 from ._element import *
+from ._section import *
 from scipy.linalg import null_space as null
 from ..general import ensure_list
 
@@ -11,7 +12,7 @@ class ElDef:
         self.nodes = nodes
         self.elements = elements
         self.assign_node_dofcounts()
-        self.global_matrices = dict()
+        self.k, self.m, self.c, self.kg = None, None, None, None
         self.domain = domain
         
         # Constraints
@@ -28,7 +29,14 @@ class ElDef:
             self.B = None
             self.L = None       
 
+    # CORE METHODS
+    def __str__(self):
+        return f'BEEF ElDef ({len(self.nodes)} nodes, {len(self.elements)} elements)'
 
+    def __repr__(self):
+        return f'BEEF ElDef ({len(self.nodes)} nodes, {len(self.elements)} elements)'
+
+    # ADDITIONAL
     def plot(self, **kwargs):        
         return _plotters.plot_eldef_3d(self, **kwargs)      
     
@@ -37,8 +45,7 @@ class ElDef:
 
     # ASSIGNMENT AND PREPARATION METHODS
     def assemble(self):
-        self.global_matrices['M'], self.global_matrices['C'], self.global_matrices['K'], self.global_matrices['Kg'] = self.global_element_matrices(constraint_type=self.constraint_type)
-     
+        self.m, self.c, self.k, self.kg = self.global_element_matrices(constraint_type=self.constraint_type)
 
     def assign_node_dofcounts(self):
         for node in self.nodes:
@@ -119,7 +126,7 @@ class ElDef:
         return sections
     
     def get_tmats(self):
-        return [el.tmat() for el in self.elements]
+        return [el.tmat for el in self.elements]
         
     
     # CONSTRAINT METHODS   
@@ -178,7 +185,7 @@ class ElDef:
     def local_node_csys(self, node_label, average_ok=True):
         elements, node_ix = self.elements_with_node(node_label, merge_parts=True)
         
-        t_mats = [el.tmat(reps=1) for el in elements]
+        t_mats = [el.get_tmat(reps=1) for el in elements]
         
         if (len(elements)>1) and not average_ok:
             raise ValueError('More elements connected to node. Use average_ok=True if averaging of transformation mats is fine.')
@@ -186,6 +193,21 @@ class ElDef:
         t_mat = blkdiag(np.mean(np.stack(t_mats, axis=2), axis=2), 2)
         
         return t_mat
+
+    def get_kg(self):
+        ndim = len(self.get_node_labels())*6
+
+        geometric_stiffness = np.zeros([ndim, ndim])
+        
+        for el in self.elements:
+            dof_ix1 = self.node_label_to_dof_ix(el.nodes[0].label)
+            dof_ix2 = self.node_label_to_dof_ix(el.nodes[1].label)
+            dof_range = np.r_[dof_ix1, dof_ix2]
+
+            T = el.tmat
+            geometric_stiffness[np.ix_(dof_range, dof_range)] += T.T @ el.get_kg() @ T
+                        
+        return geometric_stiffness
 
 
     # GENERATE OUTPUT FOR ANALYSIS    
@@ -204,11 +226,11 @@ class ElDef:
             dof_ix1 = self.node_label_to_dof_ix(el.nodes[0].label)
             dof_ix2 = self.node_label_to_dof_ix(el.nodes[1].label)
             dof_range = np.r_[dof_ix1, dof_ix2]
-            T = el.tmat()
+            T = el.tmat
             
-            mass[np.ix_(dof_range, dof_range)] += T.T @ el.mass() @ T
-            stiffness[np.ix_(dof_range, dof_range)] += T.T @ el.stiffness() @ T
-            geometric_stiffness[np.ix_(dof_range, dof_range)] += T.T @ el.geometric_stiffness() @ T
+            mass[np.ix_(dof_range, dof_range)] += T.T @ el.get_m() @ T
+            stiffness[np.ix_(dof_range, dof_range)] += T.T @ el.get_k() @ T
+            geometric_stiffness[np.ix_(dof_range, dof_range)] += T.T @ el.get_kg() @ T
         
         removed_ix = None  
         keep_ix = None
@@ -309,11 +331,11 @@ class Assembly(ElDef):
             
     
 class Part(ElDef):
-    def __init__(self, node_matrix, element_matrix, sections, constraints=None, **kwargs):      
-        nodes, elements = create_nodes_and_elements(node_matrix, element_matrix, sections)
-        if node.shape[1] == 3:
+    def __init__(self, node_matrix, element_matrix, sections=None, constraints=None, **kwargs):      
+        nodes, elements = create_nodes_and_elements(node_matrix, element_matrix, sections=sections)
+        if node_matrix.shape[1] == 3:
             domain = '2d'
-        elif node.shape[1] == 4:
+        elif node_matrix.shape[1] == 4:
             domain = '3d'
 
         super().__init__(nodes, elements, constraints, domain=domain, **kwargs)
@@ -328,20 +350,24 @@ def create_nodes(node_matrix):
     
     return nodes
 
-def create_nodes_and_elements(node_matrix, element_matrix, sections):
+def create_nodes_and_elements(node_matrix, element_matrix, sections=None):
     nodes = create_nodes(node_matrix)
     node_labels = np.array([node.label for node in nodes])
     
     n_els = element_matrix.shape[0]
     elements = [None]*n_els
     
-    if sections is not None:
-        sections = ensure_list(sections)
-    if len(sections)==1:
-        sections = sections*n_els
-        
+    if sections is None:
+        sections = [Section(name='Generic')]*n_els
+    else:
+        if sections is not None:
+            sections = ensure_list(sections)
+        if len(sections)==1:
+            sections = sections*n_els
+                
     for el_ix in range(0, n_els):
         el_node_label = element_matrix[el_ix, 1:]
+
         ix1 = np.where(node_labels==el_node_label[0])[0][0]
         ix2 = np.where(node_labels==el_node_label[1])[0][0]
 

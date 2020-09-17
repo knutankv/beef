@@ -1,16 +1,42 @@
 from ._section import *
 from . import *
 import numpy as np
+from ..general import transform_unit, blkdiag
 
 class Element:
-    def __init__(self, nodes, label=None, section=Section(), dofs_per_node=None, domain='3d'):
+    def __init__(self, nodes, label=None, section=Section(), dofs_per_node=None, domain='3d', N=0):
         self.section = section
         self.nodes = nodes
         self.label = int(label)
         self.dofs_per_node = dofs_per_node      
         self.domain = domain  
+        self.N = N
+        self.tmat = self.get_tmat()
 
-    def tmat(self, reps=None):
+    # CORE FUNCTIONS
+    def __eq__(self, other):
+        if isinstance(other, Element):
+            return self.label == other.label
+        elif isinstance(other, int):
+            return self.label == other
+            
+    def __lt__(self, other):
+        if isinstance(other, Element):
+            return self.label < other.label
+        elif isinstance(other, int):
+            return self.label < other
+
+    def __repr__(self):
+        return f'Element {self.label}'
+
+    def __str__(self):
+        return f'Element {self.label}'
+
+    def __hash__(self):
+        return hash(self.label)
+
+    # USEFUL
+    def get_tmat(self, reps=None):
         if reps is None:
             reps = int(self.dofs_per_node/3 * len(self.nodes))
             
@@ -41,16 +67,34 @@ class Element:
     
     def node_labels(self):
         return  [node.label for node in self.nodes]
+       
+    # Element matrices
+    def get_kg(self, N=None):  # element level function (global DOFs)
+        if N is None:
+            N = self.N
 
-    def get_local_matrix(self, matrix_type='K'):
+        return self.tmat.T @ self.get_local_kg() @ self.tmat
+
+    def get_k(self, N=None):  # element level function (global DOFs)
+        if N is None:
+            N = self.N
+
+        return self.tmat.T @ self.get_local_k() @ self.tmat
+
+    def get_m(self, N=None):  # element level function (global DOFs)
+        if N is None:
+            N = self.N
+
+        return self.tmat.T @ self.get_local_m() @ self.tmat
+
+    def get_local_matrix(self, matrix_type='k'):
         if matrix_type.lower() == 'k':
-            matrix = self.stiffness()
+            matrix = self.get_local_k()
         elif matrix_type.lower() == 'm':
-            matrix = self.mass()
+            matrix = self.get_local_m()
         elif matrix_type.lower() == 'kg':            
-            matrix = self.geometric_stiffness()
+            matrix = self.get_local_kg()
         else:
-
             raise ValueError('Missing or non-matching matrix type defined. Matrix type defined as %s. Supported: "m", "k", "kg".' % matrix_type.lower())
 
         return matrix
@@ -78,7 +122,7 @@ class BeamElement(Element):
         return phi_y, phi_z  
     
 
-    def stiffness(self):
+    def get_local_k(self):
         # EN234: Three-dimentional Timoshenko beam element undergoing axial, torsional and bending deformations
         # Fang, 2015 (Wengqiang_Fan.pdf)
 
@@ -115,7 +159,7 @@ class BeamElement(Element):
         return ke        
 
         
-    def mass(self):
+    def get_local_m(self):
         # https://link.springer.com/content/pdf/10.1007%2F978-1-84996-190-5_1.pdf    
 
         I_z = self.section.I_z
@@ -212,10 +256,9 @@ class BeamElement(Element):
         return me
     
     
-    def geometric_stiffness(self):
+    def get_local_kg(self):
         
         L = self.length()
-        N = self.section.N0
         # kappa = self.kappa
     
         if self.section.shear_deformation:
@@ -235,6 +278,6 @@ class BeamElement(Element):
                 [0,         0,          0,          0,          0,              0,              0,              0,              0,              0,          0,              0],
                 [0,         0,          -L/10,      0,          -L**2/30,       0,              0,              0,              L/10,           0,          2*L**2/15,      0],
                 [0,         L/10,       0,          0,          0,              -L**2/30,       0,              -L/10,          0,              0,          0,              2*L**2/15],
-            ]) * N/L
+            ]) * self.N/L
     
         return kg

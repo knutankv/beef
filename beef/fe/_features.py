@@ -7,6 +7,14 @@ class EngineeringFeature:
         self.dof_ix = dof_ix
         self.feature_type = feature_type
         self.name = name
+
+    # CORE METHODS
+    def __str__(self):
+        return f'BEEF Feature: {self.name}'
+
+    def __repr__(self):
+        return f'BEEF Feature: {self.name}'
+
         
 class Spring(EngineeringFeature):
     def __init__(self, k, master_node, dof_ix, slave_node=None, name='spring-0'):

@@ -9,6 +9,15 @@ class Step:
         self.results = dict()
         self.global_loads = None
 
+
+    # CORE METHODS
+    def __str__(self):
+        return f'BEEF Step'
+
+    def __repr__(self):
+        return f'BEEF Step'
+
+
     def prepare(self):
         if self.loads is not None:
             self.global_loads = self.analysis.global_load(self)

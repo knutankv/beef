@@ -23,6 +23,14 @@ class Constraint:
             else:
                 self.node_constraints[ix] = NodeConstraint(master_node, dofs[ix], slave_nodes[ix], relative_to)
 
+    # CORE METHODS
+    def __str__(self):
+        return f'BEEF Constraint: {self.name}'
+
+    def __repr__(self):
+        return f'BEEF Constraint: {self.name}'
+
+
 class NodeConstraint:
     def __init__(self, master_node, dof_ix, slave_node, relative_to):
         self.slave_node = slave_node

@@ -15,6 +15,12 @@ class Load:
         for ix, node_label in enumerate(node_labels):
             self.nodeloads.append(NodeLoad(node_label, ensure_list(dofs[ix]), ensure_list(amplitudes[ix]), local)) 
 
+    # CORE METHODS
+    def __str__(self):
+        return f'BEEF Load: {self.name}'
+
+    def __repr__(self):
+        return f'BEEF Load: {self.name}'
 
 class NodeLoad:
     def __init__(self, node_label, dof_ix, amplitudes, local):

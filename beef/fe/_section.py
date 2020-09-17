@@ -3,8 +3,11 @@ from . import *
 #%% Section class method
 class Section:
     def __init__(self, E=0, rho=0, A=0, I_y=0, I_z=0, 
-                 poisson=0.3, m=None, G=None, kappa=1, J=0, 
-                 N0=0, e2=None, shear_deformation=False, lumped_mass=False):
+                 poisson=0.3, m=None, G=None, kappa=1, J=0,
+                 e2=None, shear_deformation=False, lumped_mass=False, name=None):
+
+        self.name = name
+
         # Other
         self.lumped_mass = lumped_mass
         
@@ -22,10 +25,7 @@ class Section:
         self.I_z = I_z
         self.J = J
         self.kappa = kappa
-
-        # Load        
-        self.N0 = N0
-        
+                
         # Beam direction
         if e2 is not None:
             e2 = np.array(e2)
@@ -37,7 +37,15 @@ class Section:
         self.G = self.get_G()
         self.m = self.get_m()
 
+    
+    # CORE METHODS
+    def __str__(self):
+        return f'BEEF Section: {self.name}'
 
+    def __repr__(self):
+        return f'BEEF Section: {self.name}'
+
+    # USEFUL
     def get_m(self):
        if self.m is None:
            return self.rho*self.A

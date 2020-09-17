@@ -13,7 +13,15 @@ class Analysis:
     
         for step in self.steps:
             step.analysis = self
-            
+
+    # CORE METHODS
+    def __str__(self):
+        return f'BEEF Analysis ({len(self.steps)} steps, {self.assembly} assembly)'
+
+    def __repr__(self):
+        return f'BEEF Analysis ({len(self.steps)} steps, {self.assembly} assembly)'
+
+    # USEFUL
     def prepare(self):
         print('Preparing analysis...')
         self.eldef.assemble()
