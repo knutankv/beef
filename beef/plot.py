@@ -61,7 +61,7 @@ def plot_elements(elements, color='Gray', plot_nodes=False, highlighted_nodes=No
         for node in nodes:
             ax.text(node.coordinates[0], node.coordinates[1], node.coordinates[2], node.label, **l_n_dict)
 
-    
+    return ax
 
 def frame_creator(frames=30, repeats=1, swing=False, full_cycle=False):
     
