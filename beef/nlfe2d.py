@@ -117,29 +117,28 @@ class PrescribedDisplacement(Force):
 
 class Results:
     def __init__(self, analysis, element_results=['M', 'N', 'V'], node_results=[]):
-        self.analysis = analysis
-        self.part = copy(analysis.part)
+        self.analysis = copy(analysis)
         self.output = None
         self.element_results = element_results
         self.node_results = node_results
-        self.element_cogs = np.array([el.get_cog() for el in self.part.elements])
+        self.element_cogs = np.array([el.get_cog() for el in self.analysis.part.elements])
         
     def process(self, print_progress=True):
         self.output = dict()
         for key in self.element_results:
-            self.output[key] = np.zeros([len(self.part.elements), len(self.analysis.t)])
+            self.output[key] = np.zeros([len(self.analysis.part.elements), len(self.analysis.t)])
         
         for key in self.node_results:
-            self.output[key] = np.zeros([len(self.part.nodes), len(self.analysis.t)])
+            self.output[key] = np.zeros([len(self.analysis.part.nodes), len(self.analysis.t)])
             
         # Initiate progress bar
         if print_progress:
             progress_bar = tqdm(total=len(self.analysis.t)-1, initial=0, desc='Post processing')        
 
         for k, ti in enumerate(self.analysis.t):
-            self.part.deform_part_linear(self.analysis.u[:, k])
+            self.analysis.part.deform_part(self.analysis.u[:, k])
             for out in list(self.element_results):
-                self.output[out][:, k] = np.array([el.extract_load_effect(out) for el in self.part.elements])
+                self.output[out][:, k] = np.array([el.extract_load_effect(out) for el in self.analysis.part.elements])
 
 
             if print_progress:
@@ -492,9 +491,8 @@ class Analysis:
         K = L.T @ self.part.k @ L
 
         for k, tk in enumerate(self.t): 
-            f = L.T @ self.get_global_forces(tk)     # force in increment k  
-            u = solve(K, f)
-            self.u[:, k] = L @ u    # save to analysis time history
+            f = L.T @ self.get_global_forces(tk)     # force in increment k
+            self.u[:, k] = L @ solve(K, f)    # save to analysis time history
 
             if print_progress:
                 progress_bar.update(1)  # iterate on progress bar (adding 1)    
@@ -556,13 +554,9 @@ class BeamElement2d:
         
     def update_all(self):
         self.update_pos()                   # update all node positions and element geometry     
-        self.update_element_deformation()        # --> new internal forces (corotational)
+        self.update_corot()        # --> new internal forces (corotational)
         self.update_tangent_stiffness()     # --> new tangent stiffness and new mass
         self.update_element_mass()      
-
-    def update_lin(self):       
-        self.L = self.get_length()
-        self.update_element_deformation(linear=True)       # --> new internal forces    
 
     def update_pos(self):
         self.L = self.get_length()
@@ -570,13 +564,20 @@ class BeamElement2d:
         self.tmat = self.get_tmat()   
         self.psi = self.get_shear_flexibility()
 
-    def update_element_deformation(self, linear=False):
-        self.update_v(linear=linear)        # compute displacement mode
-        L = self.L0 if linear else self.L
-        Kd_c = self.get_Kd_c(L=L)           # constitutive stiffness for modes
-        
-        self.t = Kd_c @ self.v              # new internal forces (element forces) based on the two above
-                
+    def update_linear(self):
+        self.update_v_lin()
+        self.t = self.get_Kd_c() @ self.v              # new internal forces (element forces) based on the two above  
+        self.N = self.t[0]                  # update internal force N from t
+        self.M = self.t[1]
+        self.Q = -2*self.t[2]/self.L        # update internal force Q from t   
+        self.q = self.tmat.T @ self.S @ self.t  # calculate internal forces in global format
+
+    def update_corot(self, linear=False):
+        self.update_v()        # compute displacement mode
+        Kd_c = self.get_Kd_c()
+
+        self.t = Kd_c @ self.v              # new internal forces (element forces) based on the two above  
+
         self.N = self.t[0]                  # update internal force N from t
         self.M = self.t[1]
         self.Q = -2*self.t[2]/self.L        # update internal force Q from t   
@@ -585,10 +586,9 @@ class BeamElement2d:
 
         self.S = self.get_S()               # connectivity, local to global
         self.Kr = self.get_Kr()             # local Kr
-        
+
         self.q = self.tmat.T @ self.S @ self.t  # calculate internal forces in global format
-        
-        
+
     def update_tangent_stiffness(self):
         self.k = self.tmat.T @ self.get_local_k() @ self.tmat
 
@@ -661,7 +661,16 @@ class BeamElement2d:
         return self.S @ self.Kd @ self.S.T + self.Kr
            
     
-    def update_v(self, linear=False):
+    def update_v_lin(self):
+        u1 = self.nodes[0].x-self.nodes[0].x0
+        u2 = self.nodes[1].x-self.nodes[1].x0
+        print(u1)
+        print(u2)
+        self.v[0] = u1[0]-u2[0]
+        self.v[1] = (u1[2]-u2[2])/2     # symmetric angle
+        self.v[2] = (u1[2]+u2[2])/2     # asymmetric angle
+
+    def update_v(self):
         el_angle = self.get_element_angle()
 
         self.v[0] = self.L - self.L0
@@ -681,12 +690,9 @@ class BeamElement2d:
         return el_ang
 
 
-    def get_Kd_c(self, L=None):
-        if L is None:
-            L = self.L
-
+    def get_Kd_c(self):
         props = self.properties
-        Kd_c = 1/L * np.array([
+        Kd_c = 1/self.L * np.array([
             [props.E*props.A, 0, 0], 
             [0, props.E*props.I, 0],
             [0, 0, 3*self.psi*props.E*props.I]])
@@ -805,7 +811,7 @@ class Feature:
     def __init__(self, matrix_type, node_labels, dof_ixs, value, local=False):
         
         if len(node_labels) == 1 or node_labels[1]==None:
-            matrix = basic_coupled()[0:1,0:1]*value
+            matrix = basic_coupled()[0:1, 0:1]*value
             node_labels = [node_labels[0]]
             dof_ixs = [dof_ixs[0]]
         else:
@@ -923,7 +929,7 @@ class Part:
         kg = np.zeros([ndim, ndim])        
 
         for el in self.elements:
-            kg[np.ix_(el.dof_ix, el.dof_ix)] += el.get_kg(N=N, from_corot=from_element_deformation)
+            kg[np.ix_(el.dof_ix, el.dof_ix)] += el.get_kg(N=N, from_element_deformation=from_element_deformation)
 
         return kg   
 
@@ -1045,7 +1051,7 @@ class Part:
             node.x = node.x0 + u[node.global_dof_ixs]
 
         for element in self.elements:
-            element.update_lin()    
+            element.update_linear()    
 
         self.update_internal_forces(u)   # update part level q (elements are not affected by this)
     
