@@ -123,7 +123,7 @@ class Results:
         self.node_results = node_results
         self.element_cogs = np.array([el.get_cog() for el in self.analysis.part.elements])
         
-    def process(self, print_progress=True):
+    def process(self, print_progress=True, nonlinear=True):
         self.output = dict()
         for key in self.element_results:
             self.output[key] = np.zeros([len(self.analysis.part.elements), len(self.analysis.t)])
@@ -136,7 +136,11 @@ class Results:
             progress_bar = tqdm(total=len(self.analysis.t)-1, initial=0, desc='Post processing')        
 
         for k, ti in enumerate(self.analysis.t):
-            self.analysis.part.deform_part(self.analysis.u[:, k])
+            if nonlinear:
+                self.analysis.part.deform_part(self.analysis.u[:, k])
+            else:
+                self.analysis.part.deform_part_linear(self.analysis.u[:, k])
+
             for out in list(self.element_results):
                 self.output[out][:, k] = np.array([el.extract_load_effect(out) for el in self.analysis.part.elements])
 
@@ -392,7 +396,7 @@ class Analysis:
         u = solve(Ke, f)
 
         self.part.deform_part_linear(L @ u)    # deform nodes in part given by u => new f_int and K from elements
-        Kg = L.T @ self.part.get_kg() @ L
+        Kg = L.T @ self.part.get_kg(from_element_deformation=False) @ L     # get kg from axial forces generated in elements
 
         # Substep 2: Eigenvalue solution
         lambd_b, phi_b = speig(Ke, b=Kg)
@@ -497,7 +501,7 @@ class Analysis:
             if print_progress:
                 progress_bar.update(1)  # iterate on progress bar (adding 1)    
         
-        self.part.deform_part_linear(L @ u)    # deform nodes in part given by u => new f_int and K from elements
+        self.part.deform_part_linear(self.u[:,-1])    # deform nodes in part given by u => new f_int and K from elements
         
         if print_progress:    
             progress_bar.close()
@@ -550,19 +554,13 @@ class BeamElement2d:
         elif mass_formulation is 'lumped':
             self.get_local_m = self.local_m_lumped
         
-        self.update_all()
+        self.update_nonlinear()
         
-    def update_all(self):
+    def update_nonlinear(self):
         self.update_pos()                   # update all node positions and element geometry     
         self.update_corot()        # --> new internal forces (corotational)
         self.update_tangent_stiffness()     # --> new tangent stiffness and new mass
         self.update_element_mass()      
-
-    def update_pos(self):
-        self.L = self.get_length()
-        self.e = self.get_e()
-        self.tmat = self.get_tmat()   
-        self.psi = self.get_shear_flexibility()
 
     def update_linear(self):
         self.update_v_lin()
@@ -571,6 +569,12 @@ class BeamElement2d:
         self.M = self.t[1]
         self.Q = -2*self.t[2]/self.L        # update internal force Q from t   
         self.q = self.tmat.T @ self.S @ self.t  # calculate internal forces in global format
+
+    def update_pos(self):
+        self.L = self.get_length()
+        self.e = self.get_e()
+        self.tmat = self.get_tmat()   
+        self.psi = self.get_shear_flexibility()
 
     def update_corot(self, linear=False):
         self.update_v()        # compute displacement mode
@@ -591,7 +595,6 @@ class BeamElement2d:
 
     def update_tangent_stiffness(self):
         self.k = self.tmat.T @ self.get_local_k() @ self.tmat
-
 
     def get_shear_flexibility(self):  
         if not hasattr(self, 'force_psi') or self.force_psi is None:
@@ -662,13 +665,12 @@ class BeamElement2d:
            
     
     def update_v_lin(self):
-        u1 = self.nodes[0].x-self.nodes[0].x0
-        u2 = self.nodes[1].x-self.nodes[1].x0
-        print(u1)
-        print(u2)
-        self.v[0] = u1[0]-u2[0]
-        self.v[1] = (u1[2]-u2[2])/2     # symmetric angle
-        self.v[2] = (u1[2]+u2[2])/2     # asymmetric angle
+        u1 = self.nodes[0].x - self.nodes[0].x0
+        u2 = self.nodes[1].x - self.nodes[1].x0
+
+        self.v[0] = u2[0] - u1[0]
+        # self.v[1] = (u1[2]-u2[2])     # symmetric angle
+        # self.v[2] = (u1[2]+u2[2])     # asymmetric angle
 
     def update_v(self):
         el_angle = self.get_element_angle()
@@ -678,7 +680,6 @@ class BeamElement2d:
 
         phi_a = self.nodes[0].x[2] + self.nodes[1].x[2] - 2*(el_angle - self.phi0)  #asymmetric bending
         self.v[2] = ((phi_a + np.pi) % (2*np.pi)) - np.pi # % is the modulus operator, this ensures 0<phi_a<2pi
-
 
     def get_element_angle(self):
         x_a = self.nodes[0].x
@@ -1053,20 +1054,19 @@ class Part:
         for element in self.elements:
             element.update_linear()    
 
-        self.update_internal_forces(u)   # update part level q (elements are not affected by this)
+        self.update_internal_forces(u)      # on part level (element internal forces are dealt with intristicly by update function above)
     
-    
+
     def deform_part(self, u):
         for node in self.nodes:
             node.x = node.x0 + u[node.global_dof_ixs]
 
         for element in self.elements:
-            element.update_all()
+            element.update_nonlinear()
             
         self.update_tangent_stiffness()
-        self.update_internal_forces(u)   
-        self.update_mass_matrix()   
-        
+        self.update_internal_forces(u)      # on part level (element internal forces are dealt with intristicly by update function above)
+        self.update_mass_matrix()           
 
 
     def node_from_gdof(self, gdof_ix, n_dofs=3):
