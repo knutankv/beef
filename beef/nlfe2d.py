@@ -21,8 +21,9 @@ else:
 from knutils.tools import print_progress as pprogress, clear_progress
 from beef import newmark
 from beef.newmark import is_converged, factors_from_alpha
-from beef import gdof_from_nodedof, compatibility_matrix, B_to_dofpairs, dof_pairs_to_Linv, lagrange_constrain, convert_dofs, convert_dofs_list, ensure_list, gdof_ix_from_nodelabels, basic_coupled
+from beef import gdof_from_nodedof, compatibility_matrix, B_to_dofpairs, dof_pairs_to_Linv, lagrange_constrain, convert_dofs, convert_dofs_list, ensure_list, gdof_ix_from_nodelabels, basic_coupled, blkdiag
 from scipy.interpolate import interp1d
+
 
 
 class Force:
@@ -137,7 +138,7 @@ class Results:
 
         for k, ti in enumerate(self.analysis.t):
             if nonlinear:
-                self.analysis.part.deform_part(self.analysis.u[:, k])
+                self.analysis.part.deform_part(self.analysis.u[:, k], update_tangents=False)
             else:
                 self.analysis.part.deform_part_linear(self.analysis.u[:, k])
 
@@ -384,7 +385,7 @@ class Analysis:
             return self.u
 
 
-    def run_lin_buckling(self):
+    def run_lin_buckling(self, return_only_positive=True):
         from scipy.linalg import eig as speig
 
         # Retrieve constant defintions
@@ -396,14 +397,19 @@ class Analysis:
         u = solve(Ke, f)
 
         self.part.deform_part_linear(L @ u)    # deform nodes in part given by u => new f_int and K from elements
-        Kg = L.T @ self.part.get_kg(from_element_deformation=False) @ L     # get kg from axial forces generated in elements
+        Kg = L.T @ self.part.get_kg(nonlinear=False) @ L     # get kg from axial forces generated in elements
 
         # Substep 2: Eigenvalue solution
-        lambd_b, phi_b = speig(Ke, b=Kg)
-        lambd_b = np.abs(lambd_b)
-        sort_ix = np.argsort(lambd_b)
+        lambd_b, phi_b = speig(Ke, b=-Kg)
+
+        lambd_b = lambd_b.real
+        sort_ix = np.argsort(abs(lambd_b))
         lambd_b = lambd_b[sort_ix]
         phi_b = phi_b[:, sort_ix]
+
+        if return_only_positive:
+            phi_b = phi_b[:, lambd_b>0]
+            lambd_b = lambd_b[lambd_b>0]
 
         phi_b = np.real(np.vstack([self.part.L @ phi_b[:, ix] for ix in range(0, len(lambd_b))]).T)
 
@@ -485,7 +491,6 @@ class Analysis:
         L = self.part.L
         n_increments = len(self.t)
         
-        u = self.part.Linv @ np.zeros([len(self.part.nodes)*3])
         self.u = np.ones([len(self.part.nodes)*3, len(self.t)])*np.nan
 
         # Initiate progress bar
@@ -529,6 +534,7 @@ class Node:
         self.coordinates = np.array([x,y])
         self.x0 = np.array([x,y,0])
         self.x = self.x0*1
+        self.u = self.x0*0
 
 class BeamElement2d:
     def __init__(self, nodes, label, properties=SectionProperties(), shear_flexible=False, force_psi=None, mass_formulation='constitutive_timoshenko'):
@@ -556,19 +562,24 @@ class BeamElement2d:
         
         self.update_nonlinear()
         
+
     def update_nonlinear(self):
         self.update_pos()                   # update all node positions and element geometry     
-        self.update_corot()        # --> new internal forces (corotational)
+        self.update_corot()                 # --> new internal forces (corotational)
         self.update_tangent_stiffness()     # --> new tangent stiffness and new mass
         self.update_element_mass()      
 
+
     def update_linear(self):
-        self.update_v_lin()
-        self.t = self.get_Kd_c() @ self.v              # new internal forces (element forces) based on the two above  
-        self.N = self.t[0]                  # update internal force N from t
-        self.M = self.t[1]
-        self.Q = -2*self.t[2]/self.L        # update internal force Q from t   
-        self.q = self.tmat.T @ self.S @ self.t  # calculate internal forces in global format
+        self.q_loc = self.get_local_k_lin() @ self.tmat @ np.hstack([self.nodes[0].u, self.nodes[1].u])
+
+        self.N = (self.q_loc[3] - self.q_loc[0])/2             # update internal force N from t
+        self.M = (self.q_loc[5] - self.q_loc[2])/2
+        self.Q = (self.q_loc[4] - self.q_loc[1])/2
+
+        self.t = np.array([self.N, self.M, -self.Q*self.L0/2])
+        self.q = self.tmat.T @ self.get_S() @ self.t  # calculate internal forces in global format
+
 
     def update_pos(self):
         self.L = self.get_length()
@@ -576,25 +587,21 @@ class BeamElement2d:
         self.tmat = self.get_tmat()   
         self.psi = self.get_shear_flexibility()
 
+
     def update_corot(self, linear=False):
         self.update_v()        # compute displacement mode
-        Kd_c = self.get_Kd_c()
-
-        self.t = Kd_c @ self.v              # new internal forces (element forces) based on the two above  
+        self.t = self.get_Kd_c() @ self.v              # new internal forces (element forces) based on the two above  
 
         self.N = self.t[0]                  # update internal force N from t
         self.M = self.t[1]
         self.Q = -2*self.t[2]/self.L        # update internal force Q from t   
+        
+        self.q = self.tmat.T @ self.get_S() @ self.t  # calculate internal forces in global format
 
-        self.Kd = Kd_c + self.get_Kd_g()    # update modal Kd (geometric and constitutive part)
-
-        self.S = self.get_S()               # connectivity, local to global
-        self.Kr = self.get_Kr()             # local Kr
-
-        self.q = self.tmat.T @ self.S @ self.t  # calculate internal forces in global format
 
     def update_tangent_stiffness(self):
         self.k = self.tmat.T @ self.get_local_k() @ self.tmat
+
 
     def get_shear_flexibility(self):  
         if not hasattr(self, 'force_psi') or self.force_psi is None:
@@ -636,9 +643,31 @@ class BeamElement2d:
         T[4, 3:5] = T[1, :2]
         
         return T
-    
        
-    def get_local_k_alt(self):
+
+    def get_local_k_lin(self):
+        # Original version
+        k_local = np.zeros([6,6])
+        props = self.properties
+
+        k_local[:3, :3] = (1/self.L0**3) * np.array([[props.E*props.A*self.L0**2,0, 0],
+                                  [0, 12*self.psi*props.E*props.I, 6*self.psi*props.E*props.I*self.L0],
+                                  [0, 6*self.psi*props.E*props.I*self.L0, (3*self.psi+1)*props.E*props.I*self.L0**2]])
+
+        k_local[3:, 3:] = (1/self.L0**3) * np.array([[props.E*props.A*self.L0**2,0,0],
+                                  [0, 12*self.psi*props.E*props.I, -6*self.psi*props.E*props.I*self.L0],
+                                  [0, -6*self.psi*props.E*props.I*self.L0, (3*self.psi+1)*props.E*props.I*self.L0**2]])
+        
+        k_local[:3, 3:] = (1/self.L0**3) * np.array([[-props.E*props.A*self.L0**2,0,0],
+                                  [0, -12*self.psi*props.E*props.I, 6*self.psi*props.E*props.I*self.L0],
+                                  [0, -6*self.psi*props.E*props.I*self.L0, (3*self.psi-1)*props.E*props.I*self.L0**2]])
+        
+        k_local[3:, :3] = k_local[0:3,3:].T
+        
+        return k_local
+
+       
+    def get_local_k(self):
         # Original version
         k_local = np.zeros([6,6])
         props = self.properties
@@ -658,19 +687,7 @@ class BeamElement2d:
         k_local[3:, :3] = k_local[0:3,3:].T
         
         return k_local
-    
-    
-    def get_local_k(self):
-        return self.S @ self.Kd @ self.S.T + self.Kr
-           
-    
-    def update_v_lin(self):
-        u1 = self.nodes[0].x - self.nodes[0].x0
-        u2 = self.nodes[1].x - self.nodes[1].x0
-
-        self.v[0] = u2[0] - u1[0]
-        # self.v[1] = (u1[2]-u2[2])     # symmetric angle
-        # self.v[2] = (u1[2]+u2[2])     # asymmetric angle
+ 
 
     def update_v(self):
         el_angle = self.get_element_angle()
@@ -680,6 +697,7 @@ class BeamElement2d:
 
         phi_a = self.nodes[0].x[2] + self.nodes[1].x[2] - 2*(el_angle - self.phi0)  #asymmetric bending
         self.v[2] = ((phi_a + np.pi) % (2*np.pi)) - np.pi # % is the modulus operator, this ensures 0<phi_a<2pi
+
 
     def get_element_angle(self):
         x_a = self.nodes[0].x
@@ -691,26 +709,34 @@ class BeamElement2d:
         return el_ang
 
 
-    def get_Kd_c(self):
+    def get_Kd_c(self, L=None):
+        if L == None:
+            L = self.L
+            
         props = self.properties
-        Kd_c = 1/self.L * np.array([
+        Kd_c = 1/L * np.array([
             [props.E*props.A, 0, 0], 
             [0, props.E*props.I, 0],
             [0, 0, 3*self.psi*props.E*props.I]])
             
         return Kd_c
-      
+
     def get_Kd_g(self):
         return self.L*self.N*np.array([[0,0,0], [0,1/12,0], [0,0, 1/20]])
+
+    
+    ## Version including all steps like in Krenk. Less suitable for general implementation (with different element behaviour)
+    # def get_local_k(self):
+    #     return self.S @ self.Kd @ self.S.T + self.Kr                
+       
+    # def get_Kr(self):
+    #     Kr = np.zeros([6,6])
+    #     Kr[0:3,0:3] = 1/self.L * np.array([[0, -self.Q, 0], [-self.Q, self.N, 0], [0, 0, 0]]) 
+    #     Kr[0:3,3:] = -Kr[0:3,0:3]
+    #     Kr[3:,0:3] = -Kr[0:3,0:3]
+    #     Kr[3:,3:] = Kr[0:3,0:3]
         
-    def get_Kr(self):
-        Kr = np.zeros([6,6])
-        Kr[0:3,0:3] = 1/self.L * np.array([[0, -self.Q, 0], [-self.Q, self.N, 0], [0, 0, 0]]) 
-        Kr[0:3,3:] = -Kr[0:3,0:3]
-        Kr[3:,0:3] = -Kr[0:3,0:3]
-        Kr[3:,3:] = Kr[0:3,0:3]
-        
-        return Kr
+    #     return Kr
     
     
     def get_S(self):
@@ -721,6 +747,7 @@ class BeamElement2d:
                          [0,0,-2/self.L], 
                          [0, 1, 1]])            
     
+
     def local_m_lumped(self):
         m = self.properties.m
         L = self.L0
@@ -728,13 +755,13 @@ class BeamElement2d:
         
         return m_lumped
     
+    
     def local_m_euler_trans(self):
         m_et = self.local_m_euler()
         m_et[np.ix_([2,5],[2,5])] = self.local_m_lumped()[np.ix_([2,5],[2,5])]
         
         return m_et
-        
-        
+
     
     def local_m_euler(self):
         m = self.properties.m
@@ -749,6 +776,7 @@ class BeamElement2d:
                                [0,         -13*L,       -3*L**2,      0,        -22*L,     4*L**2   ]
                                ])
     
+
     def local_m_timo(self):
         rho = self.properties.m/self.properties.A
         I = self.properties.I
@@ -775,9 +803,11 @@ class BeamElement2d:
         
         return m
 
+
     def update_element_mass(self):
         self.m = self.tmat.T @ self.get_local_m() @ self.tmat
     
+
     def get_local_kg(self, N):
         L = self.L0
         return np.array([
@@ -790,11 +820,11 @@ class BeamElement2d:
                 ]) * N/(30*L)
         
         
-    def get_kg(self, N=None, from_element_deformation=True):  # element level function (global DOFs)
+    def get_kg(self, N=None, nonlinear=True):  # element level function (global DOFs)
         if N is None:
             N = self.N
 
-        if from_element_deformation:
+        if nonlinear:
             return self.tmat.T @ self.S @ self.get_Kd_g() @ self.S.T @ self.tmat #from corotated formulation
         else:
             return self.tmat.T @ self.get_local_kg(N) @ self.tmat
@@ -807,6 +837,7 @@ class BeamElement2d:
             return (self.q[4]-self.q[1])/2
         elif load_effect is 'N':
             return self.N
+
 
 class Feature:
     def __init__(self, matrix_type, node_labels, dof_ixs, value, local=False):
@@ -924,13 +955,14 @@ class Part:
         for node in self.nodes:
             node.global_dof_ixs = self.gdof_ix_from_nodelabels(node.label, dof_ix=[0,1,2])
                
-    def get_kg(self, N=None, from_element_deformation=True):       # part level function
+
+    def get_kg(self, N=None, nonlinear=True):       # part level function
         node_labels = self.node_labels
         ndim = len(node_labels)*3
         kg = np.zeros([ndim, ndim])        
 
         for el in self.elements:
-            kg[np.ix_(el.dof_ix, el.dof_ix)] += el.get_kg(N=N, from_element_deformation=from_element_deformation)
+            kg[np.ix_(el.dof_ix, el.dof_ix)] += el.get_kg(N=N, nonlinear=nonlinear)
 
         return kg   
 
@@ -1049,7 +1081,8 @@ class Part:
     
     def deform_part_linear(self, u):
         for node in self.nodes:
-            node.x = node.x0 + u[node.global_dof_ixs]
+            node.u = u[node.global_dof_ixs]
+            node.x = node.x0 + node.u
 
         for element in self.elements:
             element.update_linear()    
@@ -1057,16 +1090,19 @@ class Part:
         self.update_internal_forces(u)      # on part level (element internal forces are dealt with intristicly by update function above)
     
 
-    def deform_part(self, u):
+    def deform_part(self, u, update_tangents=True):
         for node in self.nodes:
-            node.x = node.x0 + u[node.global_dof_ixs]
+            node.u = u[node.global_dof_ixs]
+            node.x = node.x0 + node.u
 
         for element in self.elements:
             element.update_nonlinear()
-            
-        self.update_tangent_stiffness()
+
         self.update_internal_forces(u)      # on part level (element internal forces are dealt with intristicly by update function above)
-        self.update_mass_matrix()           
+        
+        if update_tangents:
+            self.update_tangent_stiffness()
+            self.update_mass_matrix()           
 
 
     def node_from_gdof(self, gdof_ix, n_dofs=3):
