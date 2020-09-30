@@ -6,16 +6,23 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 
 # Import all submodules (splitted for tidyness)
-from ._node import *
-from ._element import *
+from .node import *
+from .element import *
 
-from ._section import *
-from ._constraint import *
-from ._features import *
-from ._eldef import *
+from .section import *
+from .constraint import *
+from .features import *
+from .eldef import *
 
-from ._load import *
-from ._step import *
+from .force import *
+from .step import *
 
-from ._analysis import *
-from . import _plotters
+from .analysis import *
+from . import plotters
+
+
+import sys
+if any('jupyter' in arg for arg in sys.argv):
+    from tqdm import tqdm_notebook as tqdm
+else:
+   from tqdm import tqdm

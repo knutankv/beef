@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import numpy as np
-from . import _plotters
-from ._node import *
-from ._element import *
-from ._section import *
+from . import plotters
+from .node import *
+from .element import *
+from .section import *
 from scipy.linalg import null_space as null
 from ..general import ensure_list
 
@@ -14,6 +14,9 @@ class ElDef:
         self.assign_node_dofcounts()
         self.k, self.m, self.c, self.kg = None, None, None, None
         self.domain = domain
+
+        if set([el.domain for el in self.elements]) != set([domain]):
+            raise ValueError('Element domains has to match ElDef/Part/Assembly.')
         
         # Constraints
         self.constraints = constraints 

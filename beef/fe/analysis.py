@@ -1,5 +1,5 @@
 from . import *
-from . import _plotters
+from . import plotters
 from copy import deepcopy as copy
 
 #%% Analysis class definition
