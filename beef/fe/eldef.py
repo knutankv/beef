@@ -48,7 +48,12 @@ class ElDef:
 
     # ASSIGNMENT AND PREPARATION METHODS
     def assemble(self):
+        self.assign_global_dofs()
         self.m, self.c, self.k, self.kg = self.global_element_matrices(constraint_type=self.constraint_type)
+
+    def assign_global_dofs(self):
+        for node in self.nodes:
+            node.global_dofs = self.node_label_to_dof_ix(node.label)
 
     def assign_node_dofcounts(self):
         for node in self.nodes:
@@ -203,19 +208,18 @@ class ElDef:
         geometric_stiffness = np.zeros([ndim, ndim])
         
         for el in self.elements:
-            dof_ix1 = self.node_label_to_dof_ix(el.nodes[0].label)
-            dof_ix2 = self.node_label_to_dof_ix(el.nodes[1].label)
-            dof_range = np.r_[dof_ix1, dof_ix2]
+            glob_dofs = np.r_[el.nodes[0].global_dofs, el.nodes[1].global_dofs].astype(int)
+            local_dofs = np.r_[0:len(el.nodes[0].global_dofs), 6:6+len(el.nodes[1].global_dofs)]    #added for cases where one node in element is not present in self.nodes, check speed effect later
+  
+            geometric_stiffness[np.ix_(glob_dofs, glob_dofs)] = geometric_stiffness[np.ix_(glob_dofs, glob_dofs)] + el.get_kg()[np.ix_(local_dofs, local_dofs)]
 
-            T = el.tmat
-            geometric_stiffness[np.ix_(dof_range, dof_range)] += T.T @ el.get_kg() @ T
                         
         return geometric_stiffness
 
 
     # GENERATE OUTPUT FOR ANALYSIS    
     def global_element_matrices(self, constraint_type=None):
-        ndim = len(self.get_node_labels())*6
+        ndim = len(self.nodes)*6
         
         mass = np.zeros([ndim, ndim])
         stiffness = np.zeros([ndim, ndim])
@@ -226,14 +230,13 @@ class ElDef:
         # Should add possibility to add spring/dashpot between two nodes also.
 
         for el in self.elements:
-            dof_ix1 = self.node_label_to_dof_ix(el.nodes[0].label)
-            dof_ix2 = self.node_label_to_dof_ix(el.nodes[1].label)
+            dof_ix1, dof_ix2 = el.nodes[0].global_dofs, el.nodes[1].global_dofs
             dof_range = np.r_[dof_ix1, dof_ix2]
             T = el.tmat
             
-            mass[np.ix_(dof_range, dof_range)] += T.T @ el.get_m() @ T
-            stiffness[np.ix_(dof_range, dof_range)] += T.T @ el.get_k() @ T
-            geometric_stiffness[np.ix_(dof_range, dof_range)] += T.T @ el.get_kg() @ T
+            mass[np.ix_(dof_range, dof_range)] += el.get_m()
+            stiffness[np.ix_(dof_range, dof_range)] += el.get_k()
+            geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg()
         
         removed_ix = None  
         keep_ix = None
@@ -268,9 +271,9 @@ class ElDef:
     
     
     def elements_with_node(self, node_label, merge_parts=True, return_node_ix=True):
-        elements = [el for el in self.elements if node_label in el.node_labels()]  
+        elements = [el for el in self.elements if node_label in el.nodes]  
         
-        node_ix = [np.where(np.array(el.node_labels())==node_label)[0][0] for el in elements]
+        node_ix = [np.where(el.nodes==node_label)[0] for el in elements]
             
         if return_node_ix:
             return elements, node_ix
@@ -374,5 +377,5 @@ def create_nodes_and_elements(node_matrix, element_matrix, sections=None):
         ix1 = np.where(node_labels==el_node_label[0])[0][0]
         ix2 = np.where(node_labels==el_node_label[1])[0][0]
 
-        elements[el_ix] = BeamElement([nodes[ix1], nodes[ix2]], label=element_matrix[el_ix, 0], section=sections[el_ix])
+        elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=element_matrix[el_ix, 0], section=sections[el_ix])
     return nodes, elements
