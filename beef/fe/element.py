@@ -70,7 +70,7 @@ class BeamElement:
 class BeamElement2d(BeamElement):
     def __init__(self, nodes, label, section=Section(), shear_flexible=False, mass_formulation='timoshenko', nonlinear=True, N0=0):
         self.nodes = nodes
-        self.label = label
+        self.label = int(label)
         self.section = section
         self.shear_flexible = shear_flexible
         self.nonlinear = nonlinear
@@ -370,7 +370,7 @@ class BeamElement3d(BeamElement):
     
     def get_e2(self):
         if self.e2 == None:
-            smallest_ix = np.argmax(abs(self.e))
+            smallest_ix = np.argmin(abs(self.e))
             return np.eye(3)[smallest_ix, :]
         else:
             return self.e2
@@ -500,14 +500,14 @@ class BeamElement3d(BeamElement):
     def get_local_kg(self, N=None):
         
         if N is None:
-            N = self.N
+            N = self.N0
         
         L = self.L
     
         if self.section.shear_deformation:
             print('Timoshenko formulation (shear deformation) not implemented for geometric stiffness. Using Euler-Bernoulli.')
 
-        kg = np.array([
+        return np.array([
                 [0,         0,          0,          0,          0,              0,              0,              0,              0,              0,          0,              0],
                 [0,         6/5,        0,          0,          0,              L/10,           0,              -6/5,           0,              0,          0,               L/10],
                 [0,         0,          6/5,        0,          -L/10,          0,              0,              0,              -6/5,           0,          -L/10,          0],
@@ -522,12 +522,11 @@ class BeamElement3d(BeamElement):
                 [0,         L/10,       0,          0,          0,              -L**2/30,       0,              -L/10,          0,              0,          0,              2*L**2/15],
             ]) * N/L
     
-        return kg
     
     
     def get_kg(self, N=None):  # element level function (global DOFs)
         if N is None:
-            N = self.N
+            N = self.N0
 
         return self.tmat.T @ self.get_local_kg(N=N) @ self.tmat
 

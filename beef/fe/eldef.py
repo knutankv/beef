@@ -205,16 +205,19 @@ class ElDef:
     def get_kg(self):
         ndim = len(self.get_node_labels())*6
 
-        geometric_stiffness = np.zeros([ndim, ndim])
+        kg_eldef = np.zeros([ndim, ndim])
         
         for el in self.elements:
             glob_dofs = np.r_[el.nodes[0].global_dofs, el.nodes[1].global_dofs].astype(int)
             local_dofs = np.r_[0:len(el.nodes[0].global_dofs), 6:6+len(el.nodes[1].global_dofs)]    #added for cases where one node in element is not present in self.nodes, check speed effect later
-  
-            geometric_stiffness[np.ix_(glob_dofs, glob_dofs)] = geometric_stiffness[np.ix_(glob_dofs, glob_dofs)] + el.get_kg()[np.ix_(local_dofs, local_dofs)]
+            
+            kg_eldef[np.ix_(glob_dofs, glob_dofs)] += el.get_kg()[np.ix_(local_dofs, local_dofs)]
+            
+            if np.any(np.isnan(el.get_kg()[np.ix_(local_dofs, local_dofs)])):
+                print(el)
 
                         
-        return geometric_stiffness
+        return kg_eldef
 
 
     # GENERATE OUTPUT FOR ANALYSIS    
@@ -377,5 +380,5 @@ def create_nodes_and_elements(node_matrix, element_matrix, sections=None):
         ix1 = np.where(node_labels==el_node_label[0])[0][0]
         ix2 = np.where(node_labels==el_node_label[1])[0][0]
 
-        elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=element_matrix[el_ix, 0], section=sections[el_ix])
+        elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix])
     return nodes, elements
