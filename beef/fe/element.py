@@ -341,7 +341,7 @@ class BeamElement3d(BeamElement):
             raise ValueError("{'lumped', 'consistent'} are allowed values for mass_formulation. Please correct input.")
         elif mass_formulation is 'lumped':
             self.get_local_m = self.local_m_lumped
-        elif mass_formulation is 'euler':
+        elif mass_formulation is 'consistent':
             self.get_local_m = self.local_m_consistent
 
         if nonlinear:
@@ -529,6 +529,9 @@ class BeamElement3d(BeamElement):
             N = self.N0
 
         return self.tmat.T @ self.get_local_kg(N=N) @ self.tmat
+
+    def get_m(self):
+        return self.tmat.T @ self.get_local_m() @ self.tmat
 
     # --------------- FE UPDATING ---------------------------------
     def update_linear(self):

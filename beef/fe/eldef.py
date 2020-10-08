@@ -51,6 +51,14 @@ class ElDef:
         self.assign_global_dofs()
         self.m, self.c, self.k, self.kg = self.global_element_matrices(constraint_type=self.constraint_type)
 
+    def discard_unused_elements(self): #only elements connected to two nodes are kept
+        discard_ix = []
+        for element in self.elements:
+            if (element.nodes[0] not in self.nodes) or (element.nodes[1] not in self.nodes):
+                discard_ix.append(self.elements.index(element))
+
+        self.elements = [self.elements[ix] for ix in range(len(self.elements)) if ix not in discard_ix]
+
     def assign_global_dofs(self):
         for node in self.nodes:
             node.global_dofs = self.node_label_to_dof_ix(node.label)
@@ -75,7 +83,7 @@ class ElDef:
     
     # NODE/DOF LOOKUP AND BOOKKEEPING METHODS      
     def get_node(self, node_label):
-        return [node for node in self.nodes if node.label==node_label][0]
+        return [node for node in self.nodes if node.label==node_label]
     
     def all_dof_ixs(self):
         # Ready for elements with fewer dofs per node!
@@ -204,13 +212,17 @@ class ElDef:
 
     def get_kg(self):
         ndim = len(self.get_node_labels())*6
-
         kg_eldef = np.zeros([ndim, ndim])
         
         for el in self.elements:
+            if el.nodes[1].global_dofs is None:
+                print(el.nodes[1].global_dofs)
+                print(el.nodes[1])
+                
             glob_dofs = np.r_[el.nodes[0].global_dofs, el.nodes[1].global_dofs].astype(int)
             local_dofs = np.r_[0:len(el.nodes[0].global_dofs), 6:6+len(el.nodes[1].global_dofs)]    #added for cases where one node in element is not present in self.nodes, check speed effect later
-            
+
+
             kg_eldef[np.ix_(glob_dofs, glob_dofs)] += el.get_kg()[np.ix_(local_dofs, local_dofs)]
             
             if np.any(np.isnan(el.get_kg()[np.ix_(local_dofs, local_dofs)])):
