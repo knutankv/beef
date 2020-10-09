@@ -5,6 +5,65 @@ from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Line3DCollection as LC
 
 
+def plot_elements_vispy(elements, canvas=None, view={}):
+    import vispy
+    import numpy as np
+    vispy.use('PyQt5')
+    
+    from vispy import visuals, scene
+    
+    view_settings = dict(up='z', fov=60)
+    view_settings.update(**view)
+    
+    if type(canvas) is not scene.SceneCanvas:
+        canvas = scene.SceneCanvas()
+        
+    view = canvas.central_widget.add_view()
+    view.camera = scene.TurntableCamera(**view_settings)
+    
+    element_lines = [None]*len(elements)
+
+    for ix, el in enumerate(elements):
+        element_lines[ix] = np.vstack([node.coordinates for node in el.nodes])
+        
+        # if element_labels:
+        #     cog = el.cog
+        #     ax.text(cog[0], cog[1], cog[2], el.label, **l_e_dict)
+    element_pos = np.vstack(element_lines)
+    line = scene.visuals.Line(pos=element_pos, connect='segments')
+    view.add(line)
+    canvas.show()
+    axis = scene.visuals.XYZAxis(parent=view.scene)
+    
+    # ax.add_collection(LC(element_lines, **e_dict))
+
+    # nodes = [el.nodes for el in elements]
+    # nodes = [a for b in nodes for a in b] #flatten
+    # nodes = list(set(nodes))    #only keep unique
+    
+    # if plot_nodes:
+    #     all_node_coords = np.vstack([node.coordinates for node in nodes])
+    #     ax.plot(all_node_coords[:,0], all_node_coords[:,1], all_node_coords[:,2], **n_dict)
+    
+    # if highlighted_nodes is not None:
+    #     node_labels = [node.label for node in nodes]
+    #     sel_nodes = [node for node in nodes if node.label in highlighted_nodes]
+        
+    #     if len(sel_nodes) >= 1:
+    #         xy = np.vstack([node.coordinates for node in sel_nodes])
+    #         ax.plot(xy[:,0], xy[:,1], xy[:,2], '.r')
+    #     else:
+    #         print('Requested nodes to highlight not found.')
+
+    
+    # if node_labels:
+    #     for node in nodes:
+    #         ax.text(node.coordinates[0], node.coordinates[1], node.coordinates[2], node.label, **l_n_dict)
+
+    # return ax
+    
+    
+
 def plot_elements(elements, color='Gray', plot_nodes=False, highlighted_nodes=None, node_labels=False, 
          element_labels=False, fig=None, ax=None, element_settings={},
          node_settings={}, node_label_settings={}, element_label_settings={}):
