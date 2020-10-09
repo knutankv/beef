@@ -70,7 +70,7 @@ class BeamElement:
 class BeamElement2d(BeamElement):
     def __init__(self, nodes, label, section=Section(), shear_flexible=False, mass_formulation='timoshenko', nonlinear=True, N0=0):
         self.nodes = nodes
-        self.label = label
+        self.label = int(label)
         self.section = section
         self.shear_flexible = shear_flexible
         self.nonlinear = nonlinear
@@ -105,6 +105,7 @@ class BeamElement2d(BeamElement):
             self.update = self.update_linear
             self.get_local_k = self.local_k_linear
         
+        self.update_geometry()
         self.initiate_nodes()
         self.phi0 = self.get_element_angle()
         self.update()        
@@ -328,6 +329,7 @@ class BeamElement3d(BeamElement):
         self.nonlinear = nonlinear
         
         self.e = self.get_e()
+        self.e2 = e2
         self.N0 = N0
 
         self.dofs_per_node = 6     
@@ -339,7 +341,7 @@ class BeamElement3d(BeamElement):
             raise ValueError("{'lumped', 'consistent'} are allowed values for mass_formulation. Please correct input.")
         elif mass_formulation is 'lumped':
             self.get_local_m = self.local_m_lumped
-        elif mass_formulation is 'euler':
+        elif mass_formulation is 'consistent':
             self.get_local_m = self.local_m_consistent
 
         if nonlinear:
@@ -348,6 +350,7 @@ class BeamElement3d(BeamElement):
             self.get_local_k = self.local_k_linear
             self.update = self.update_linear
 
+        self.update_geometry()
         self.initiate_nodes()
         self.update()        
 
@@ -363,7 +366,14 @@ class BeamElement3d(BeamElement):
     # ------------- GEOMETRY -----------------------------
     def get_tmat(self):
         T0 = transform_unit(self.e, self.get_e2())
-        return blkdiag(T0, 2)
+        return blkdiag(T0, 4)
+    
+    def get_e2(self):
+        if self.e2 == None:
+            smallest_ix = np.argmin(abs(self.e))
+            return np.eye(3)[smallest_ix, :]
+        else:
+            return self.e2
     
     # ------------- FE CORE -------------------------------
     def local_k_linear(self):
@@ -487,14 +497,17 @@ class BeamElement3d(BeamElement):
         return me
     
 
-    def get_local_kg(self):
+    def get_local_kg(self, N=None):
         
-        L = self.length()
+        if N is None:
+            N = self.N0
+        
+        L = self.L
     
         if self.section.shear_deformation:
             print('Timoshenko formulation (shear deformation) not implemented for geometric stiffness. Using Euler-Bernoulli.')
 
-        kg = np.array([
+        return np.array([
                 [0,         0,          0,          0,          0,              0,              0,              0,              0,              0,          0,              0],
                 [0,         6/5,        0,          0,          0,              L/10,           0,              -6/5,           0,              0,          0,               L/10],
                 [0,         0,          6/5,        0,          -L/10,          0,              0,              0,              -6/5,           0,          -L/10,          0],
@@ -507,9 +520,18 @@ class BeamElement3d(BeamElement):
                 [0,         0,          0,          0,          0,              0,              0,              0,              0,              0,          0,              0],
                 [0,         0,          -L/10,      0,          -L**2/30,       0,              0,              0,              L/10,           0,          2*L**2/15,      0],
                 [0,         L/10,       0,          0,          0,              -L**2/30,       0,              -L/10,          0,              0,          0,              2*L**2/15],
-            ]) * self.N/L
+            ]) * N/L
     
-        return kg
+    
+    
+    def get_kg(self, N=None):  # element level function (global DOFs)
+        if N is None:
+            N = self.N0
+
+        return self.tmat.T @ self.get_local_kg(N=N) @ self.tmat
+
+    def get_m(self):
+        return self.tmat.T @ self.get_local_m() @ self.tmat
 
     # --------------- FE UPDATING ---------------------------------
     def update_linear(self):
