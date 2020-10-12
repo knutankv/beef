@@ -369,7 +369,7 @@ class BeamElement3d(BeamElement):
         return blkdiag(T0, 4)
     
     def get_e2(self):
-        if self.e2 == None:
+        if self.e2 is None:
             smallest_ix = np.argmin(abs(self.e))
             return np.eye(3)[smallest_ix, :]
         else:

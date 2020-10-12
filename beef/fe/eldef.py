@@ -5,7 +5,8 @@ from .node import *
 from .element import *
 from .section import *
 from scipy.linalg import null_space as null
-from ..general import ensure_list
+from ..general import ensure_list, sync_ixs
+from copy import deepcopy as copy
 
 class ElDef:
     def __init__(self, nodes, elements, constraints=None, constraint_type='lagrange', domain='3d'):
@@ -41,13 +42,14 @@ class ElDef:
 
     # ADDITIONAL
     def plot(self, **kwargs):        
-        return _plotters.plot_eldef_3d(self, **kwargs)      
+        return plotters.plot_elements(self.elements, **kwargs)      
     
     def update_u_plot(self, u_handle, u):
-        _plotters.update_plot_u_eldef(self, u_handle, u)
+        plotters.update_plot_u_eldef(self, u_handle, u)
 
     # ASSIGNMENT AND PREPARATION METHODS
     def assemble(self):
+        self.assign_node_dofcounts() # ? 
         self.assign_global_dofs()
         self.m, self.c, self.k, self.kg = self.global_element_matrices(constraint_type=self.constraint_type)
 
@@ -96,7 +98,21 @@ class ElDef:
         dof_ix = np.arange(0, int(n_dofs))
         return dof_ix  
     
-    
+    def get_node_subset(self, nodes):
+        subset = copy(self)
+        subset.nodes = [node for node in self.nodes if node in nodes]
+        subset.discard_unused_elements()
+        subset.assign_global_dofs()
+        return subset
+        
+    def get_element_subset(self, elements):
+        subset = copy(self)
+        subset.elements = [element for element in self.elements if element in elements]
+        subset.nodes = [item for sublist in [el.nodes for el in subset.elements] for item in sublist]
+        subset.assign_node_dofcounts()
+        subset.assign_global_dofs()
+        return subset
+
     def get_elements_with_nodes(self, node_label_list, return_only_labels=False):
         els = []
         for element in self.elements:
