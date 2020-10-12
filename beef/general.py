@@ -3,6 +3,10 @@ from scipy.linalg import null_space as null
 from knutils import intersect_as_matlab as intersect_as_matlab
 
 #%% General functions
+def n2d_ix(node_ixs, n_dofs=6):
+    return np.hstack([node_ix*np.arange(n_dofs) for node_ix in node_ixs])
+
+
 def extract_dofs(mat, dof_ix=[0,1,2], n_dofs=6, axis=0):
     get_dofs = np.vstack([np.arange(dof, mat.shape[axis],n_dofs) for dof in dof_ix]).T.flatten()
     return mat.take(get_dofs, axis=axis)

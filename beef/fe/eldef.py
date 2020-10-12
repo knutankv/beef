@@ -61,6 +61,9 @@ class ElDef:
 
         self.elements = [self.elements[ix] for ix in range(len(self.elements)) if ix not in discard_ix]
 
+    def arrange_nodes(self, nodelabels):
+        self.nodes = self.get_nodes(nodelabels)
+
     def assign_global_dofs(self):
         for node in self.nodes:
             node.global_dofs = self.node_label_to_dof_ix(node.label)
@@ -75,17 +78,25 @@ class ElDef:
             
         self.ndofs = self.all_ndofs()
         
-            
+    
+    # NODE/DOF LOOKUP AND BOOKKEEPING METHODS      
     def all_ndofs(self):
         return np.array([node.ndofs for node in self.nodes])
     
-    
+    def in_part(self, nodelabels):
+        return np.isin(nodelabels, self.get_node_labels())
+
+    def in_list(self, nodelabels):
+        return np.isin(self.get_node_labels(), nodelabels)
+
     def get_node_labels(self):
         return np.array([node.label for node in self.nodes])
     
-    # NODE/DOF LOOKUP AND BOOKKEEPING METHODS      
-    def get_node(self, node_label):
-        return [node for node in self.nodes if node.label==node_label]
+    def get_node(self, nodelabel):
+        return self.nodes[self.nodes.index(int(nodelabel))]
+
+    def get_nodes(self, nodelabels):
+        return [self.nodes[self.nodes.index(int(nodelabel))] for nodelabel in nodelabels]
     
     def all_dof_ixs(self):
         # Ready for elements with fewer dofs per node!
@@ -146,6 +157,15 @@ class ElDef:
         lower_dofs = sum(self.ndofs[:node_ix])
         dof_ix = lower_dofs + np.arange(0, self.ndofs[node_ix])
         return dof_ix
+
+    # MODIFIERS
+    def deform_part(self, u):
+        for node in self.nodes:
+            node.u = u[node.global_dofs]
+            node.x = node.x0 + node.u
+
+        for element in self.elements:
+            element.update()
 
 
     # GET METHODS

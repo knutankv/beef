@@ -8,9 +8,12 @@ vispy.use('PyQt5')
 from vispy import visuals, scene
     
 
-def plot_elements(elements, sel_nodes=None, sel_elements=None, canvas={}, cam={}, tmat_scaling=1, plot_tmat_ax=None, plot_nodes=False, node_labels=False, element_labels=False, element_label_settings={}, node_label_settings={}, element_settings={}, node_settings={}, sel_node_settings={}, sel_element_settings={}, sel_node_label_settings={}, sel_element_label_settings={},tmat_settings={}):       
+def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements=None, canvas={}, cam={}, tmat_scaling=1, plot_tmat_ax=None, plot_nodes=False, node_labels=False, element_labels=False, element_label_settings={}, node_label_settings={}, element_settings={}, node_settings={}, sel_node_settings={}, sel_element_settings={}, sel_node_label_settings={}, sel_element_label_settings={}, tmat_settings={}, deformed_element_settings={}):       
     el_settings = dict(color='#008800')
     el_settings.update(**element_settings)
+
+    def_el_settings = dict(color='#008800')
+    def_el_settings.update(**deformed_element_settings)
 
     elsel_settings = dict(color='#ff0055',width=3)
     elsel_settings.update(**sel_element_settings)
@@ -80,6 +83,15 @@ def plot_elements(elements, sel_nodes=None, sel_elements=None, canvas={}, cam={}
             element_lines[ix] = np.vstack([node.coordinates for node in el.nodes])
 
         element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **elsel_settings)
+        view.add(element_visual)
+
+    # Overlay deformed plot if 
+    if overlay_deformed:
+        element_lines = [None]*len(elements)
+        for ix, el in enumerate(elements):
+            element_lines[ix] = np.vstack([node.x[:2] for node in el.nodes])
+
+        element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **def_el_settings)
         view.add(element_visual)
 
     # Establish element labels
