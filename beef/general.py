@@ -4,7 +4,7 @@ from knutils import intersect_as_matlab as intersect_as_matlab
 
 #%% General functions
 def n2d_ix(node_ixs, n_dofs=6):
-    return np.hstack([node_ix*np.arange(n_dofs) for node_ix in node_ixs])
+    return np.hstack([node_ix*n_dofs+np.arange(n_dofs) for node_ix in node_ixs])
 
 
 def extract_dofs(mat, dof_ix=[0,1,2], n_dofs=6, axis=0):

@@ -1,4 +1,5 @@
 from beef import basic_coupled
+import numpy as np
 
 class Feature:
     def __init__(self, matrix_type, node_labels, dof_ixs, value, local=False, name=None):

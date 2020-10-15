@@ -1,4 +1,4 @@
-from . import *
+import numpy as np
 
 #%% Section class method
 class Section:

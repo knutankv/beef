@@ -26,8 +26,11 @@ class BeamElement:
     def get_cog(self):
         return (self.nodes[0].coordinates + self.nodes[1].coordinates)/2
 
-    def get_vec(self):
-        return self.nodes[1].coordinates - self.nodes[0].coordinates
+    def get_vec(self, undeformed=False):
+        if undeformed:
+            return self.nodes[1].coordinates - self.nodes[0].coordinates      
+        else:
+            return self.nodes[1].x[:self.dim] - self.nodes[0].x[:self.dim]
     
     def get_e(self):
         return self.get_vec()/self.get_length()
@@ -75,29 +78,26 @@ class BeamElement2d(BeamElement):
         self.shear_flexible = shear_flexible
         self.nonlinear = nonlinear
 
-        self.v = np.zeros(3)
-        self.e = self.get_e()
-        self.e2 = self.get_e2()
-        self.N0 = N0
-
-        self.dofs_per_node = 3     
+        self.dofs_per_node = 3  
+        self.dim = 2   
         self.domain = '2d'  
 
-        self.L0 = self.get_length()
+        self.v = np.zeros(3)
+        self.N0 = N0
 
         # Assign mass matrix function
         if mass_formulation not in ['timoshenko', 'euler', 'lumped', 'euler_trans']:
             raise ValueError("{timoshenko', 'euler', 'lumped', 'euler_trans'} are allowed values for mass_formulation. Please correct input.")
-        elif mass_formulation is 'timoshenko':
+        elif mass_formulation == 'timoshenko':
             self.get_local_m = self.local_m_timo
-        elif mass_formulation is 'euler':
+        elif mass_formulation == 'euler':
             self.get_local_m = self.local_m_euler
-        elif mass_formulation  is 'euler_trans':
+        elif mass_formulation  == 'euler_trans':
             self.get_local_m = self.local_m_euler_trans
-        elif mass_formulation is 'lumped':
+        elif mass_formulation == 'lumped':
             self.get_local_m = self.local_m_lumped
 
-        # Assign update function
+        # Assign update functions
         if nonlinear:
             self.update = self.update_nonlinear
             self.get_local_k = self.local_k_nonlinear
@@ -105,9 +105,10 @@ class BeamElement2d(BeamElement):
             self.update = self.update_linear
             self.get_local_k = self.local_k_linear
         
-        self.update_geometry()
         self.initiate_nodes()
+        self.L0 = self.get_length()
         self.phi0 = self.get_element_angle()
+        self.update_geometry()
         self.update()        
 
     # ------------- INITIALIZATION ----------------------
@@ -136,6 +137,7 @@ class BeamElement2d(BeamElement):
         T = np.eye(6)
         T[0, :2] = self.e
         T[1, :2] = self.e2
+
         T[3, 3:5] = T[0, :2]
         T[4, 3:5] = T[1, :2]
 
@@ -303,11 +305,11 @@ class BeamElement2d(BeamElement):
 
     # --------------- POST PROCESSING ------------------------------
     def extract_load_effect(self, load_effect):
-        if load_effect is 'M':
+        if load_effect == 'M':
             return (self.q[5] - self.q[2])/2
-        elif load_effect is 'V':
+        elif load_effect == 'V':
             return (self.q[4] - self.q[1])/2
-        elif load_effect is 'N':
+        elif load_effect == 'N':
             return self.N
 
     # --------------- POST PROCESSING ------------------------------
@@ -321,27 +323,31 @@ class BeamElement2d(BeamElement):
             return self.tmat.T @ self.get_local_kg(N) @ self.tmat
 
 class BeamElement3d(BeamElement):
-    def __init__(self, nodes, label=None, section=Section(), mass_formulation='consistent', shear_flexible=False, nonlinear=False, e2=None, N0=0):
+    def __init__(self, nodes, label=None, section=Section(), mass_formulation='consistent', shear_flexible=False, nonlinear=False, e2=None, N0=0, left_handed_csys=False):
         self.nodes = nodes
         self.label = label
         self.section = section
         self.shear_flexible = shear_flexible
         self.nonlinear = nonlinear
         
-        self.e = self.get_e()
-        self.e2 = e2
-        self.N0 = N0
-
+        self.dim = 3
         self.dofs_per_node = 6     
         self.domain = '3d'  
 
-        self.L0 = self.get_length()   
+        self.e2 = e2
+        self.N0 = N0
+        self.left_handed_csys = left_handed_csys
+        
+        if left_handed_csys:
+            self.get_tmat = self.get_tmat_lhs
+        else:
+            self.get_tmat = self.get_tmat_rhs            
 
         if mass_formulation not in ['lumped', 'consistent']:
             raise ValueError("{'lumped', 'consistent'} are allowed values for mass_formulation. Please correct input.")
-        elif mass_formulation is 'lumped':
+        elif mass_formulation == 'lumped':
             self.get_local_m = self.local_m_lumped
-        elif mass_formulation is 'consistent':
+        elif mass_formulation == 'consistent':
             self.get_local_m = self.local_m_consistent
 
         if nonlinear:
@@ -350,8 +356,9 @@ class BeamElement3d(BeamElement):
             self.get_local_k = self.local_k_linear
             self.update = self.update_linear
 
-        self.update_geometry()
         self.initiate_nodes()
+        self.L0 = self.get_length()   
+        self.update_geometry()
         self.update()        
 
     # ------------- INITIALIZATION ----------------------
@@ -364,9 +371,22 @@ class BeamElement3d(BeamElement):
             node.u = np.zeros(6)
 
     # ------------- GEOMETRY -----------------------------
-    def get_tmat(self):
-        T0 = transform_unit(self.e, self.get_e2())
+    def get_tmat_rhs(self):
+        T0 = transform_unit(self.get_e(), self.get_e2())
         return blkdiag(T0, 4)
+    
+    def get_tmat_lhs(self):
+        T0 = transform_unit(self.get_e(), self.get_e2())
+        T_r2l = np.array([[1,0,0,0,0,0], 
+                          [0,0,1,0,0,0],
+                          [0,1,0,0,0,0],
+                          [0,0,0,-1,0,0],
+                          [0,0,0,0,0,-1],
+                          [0,0,0,0,-1,0]])
+        
+        return blkdiag(T_r2l, 2) @ blkdiag(T0, 4)
+        
+    
     
     def get_e2(self):
         if self.e2 is None:
@@ -389,7 +409,7 @@ class BeamElement3d(BeamElement):
         J = self.section.J       
         k_axial = E*A/L
 
-        mu_y, mu_z = self.get_psi()
+        mu_y, mu_z, phi_y, phi_z = self.get_psi(return_phi=True)
         
         ke = np.array([
             [k_axial, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -413,7 +433,7 @@ class BeamElement3d(BeamElement):
         I_z = self.section.I[1]
         I_y = self.section.I[0]
 
-        mu_y, mu_z = self.get_psi()
+        mu_y, mu_z, phi_y, phi_z = self.get_psi(return_phi=True)
 
         m = self.section.m
         L = self.L
@@ -443,7 +463,7 @@ class BeamElement3d(BeamElement):
         # https://link.springer.com/content/pdf/10.1007%2F978-1-84996-190-5_1.pdf    
 
         I_y, I_z = self.section.I
-        mu_y, mu_z = self.get_psi()
+        mu_y, mu_z, phi_y, phi_z = self.get_psi(return_phi=True)
 
         m = self.section.m
         L = self.L
@@ -498,7 +518,6 @@ class BeamElement3d(BeamElement):
     
 
     def get_local_kg(self, N=None):
-        
         if N is None:
             N = self.N0
         
@@ -525,9 +544,6 @@ class BeamElement3d(BeamElement):
     
     
     def get_kg(self, N=None):  # element level function (global DOFs)
-        if N is None:
-            N = self.N0
-
         return self.tmat.T @ self.get_local_kg(N=N) @ self.tmat
 
     def get_m(self):
@@ -539,9 +555,9 @@ class BeamElement3d(BeamElement):
 
     # --------------- POST PROCESSING ------------------------------
     def extract_load_effect(self, load_effect):
-        if load_effect is 'M':
+        if load_effect == 'M':
             return (self.q[5] - self.q[2])/2
-        elif load_effect is 'V':
+        elif load_effect == 'V':
             return (self.q[4] - self.q[1])/2
-        elif load_effect is 'N':
+        elif load_effect == 'N':
             return self.N

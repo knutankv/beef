@@ -1,18 +1,48 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
-from mpl_toolkits.mplot3d import Axes3D
-from mpl_toolkits.mplot3d.art3d import Line3DCollection as LC
 import vispy
 vispy.use('PyQt5')
 from vispy import visuals, scene
-    
+from copy import deepcopy
 
-def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements=None, canvas={}, cam={}, tmat_scaling=1, plot_tmat_ax=None, plot_nodes=False, node_labels=False, element_labels=False, element_label_settings={}, node_label_settings={}, element_settings={}, node_settings={}, sel_node_settings={}, sel_element_settings={}, sel_node_label_settings={}, sel_element_label_settings={}, tmat_settings={}, deformed_element_settings={}):       
+def rm_visuals(view):
+    for child in view.children[0].children:
+        if type(child) in [scene.Line, scene.visuals.Markers, scene.Text]:
+            child.parent = None        
+
+def initialize_plot(canvas={}, view=None, cam={}, elements=None, title='BEEF Element plot'):
+    if elements is not None:
+        nodes = list(set([a for b in [el.nodes for el in elements] for a in b])) #flat list of unique nodes
+        node_pos = np.vstack([node.coordinates for node in nodes])
+        global_cog = np.mean(node_pos, axis=0)
+    else: 
+        global_cog = np.array([0,0,0])
+
+    cam_settings = dict(up='z', fov=0, distance=2000, center=global_cog)    #standard values
+            
+
+    if type(canvas) is not scene.SceneCanvas:
+        sc_settings = dict(bgcolor='white', title=title)
+        sc_settings.update(**canvas)
+        canvas = scene.SceneCanvas(**sc_settings)
+
+    if view == None:    
+        view = canvas.central_widget.add_view()
+    else:
+        cam = view.camera
+
+    if type(cam) in [scene.cameras.TurntableCamera, scene.cameras.BaseCamera, scene.cameras.FlyCamera, scene.cameras.ArcballCamera, scene.cameras.PanZoomCamera, scene.cameras.Magnify1DCamera]:
+        view.camera = cam
+    else: # still a dict
+        cam_settings.update(**cam)
+        view.camera = scene.ArcballCamera(**cam_settings)
+
+    return view, canvas, view.camera
+
+def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements=None, canvas={}, hold_on=False, view=None, cam={}, tmat_scaling=1, plot_tmat_ax=None, plot_nodes=False, node_labels=False, element_labels=False, element_label_settings={}, node_label_settings={}, element_settings={}, node_settings={}, sel_node_settings={}, sel_element_settings={}, sel_node_label_settings={}, sel_element_label_settings={}, tmat_settings={}, deformed_element_settings={}, title='BEEF Element plot'):       
     el_settings = dict(color='#008800')
     el_settings.update(**element_settings)
 
-    def_el_settings = dict(color='#008800')
+    def_el_settings = dict(color='#ff2288')
     def_el_settings.update(**deformed_element_settings)
 
     elsel_settings = dict(color='#ff0055',width=3)
@@ -50,23 +80,16 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
 
     unsel_elements = [el for el in elements if el.label not in sel_elements]
     sel_elements = [el for el in elements if el.label in sel_elements]
-
-    if type(canvas) is not scene.SceneCanvas:
-        sc_settings = dict(bgcolor='white', title='BEEF Element plot')
-        sc_settings.update(**canvas)
-        canvas = scene.SceneCanvas(**sc_settings)
-        
-    view = canvas.central_widget.add_view()
-
-    # Camera settings
-    if type(cam) in [scene.cameras.TurntableCamera, scene.cameras.BaseCamera, scene.cameras.FlyCamera, scene.cameras.ArcballCamera, scene.cameras.PanZoomCamera, scene.cameras.Magnify1DCamera]:
-        view.camera = cam
-    else:   
-        global_cog = np.mean(node_pos, axis=0)
-        cam_settings = dict(up='z', fov=0, distance=1000, center=global_cog)
-        cam_settings.update(**cam)
-        view.camera = scene.ArcballCamera(**cam_settings)
     
+    if view is None:
+        view, canvas, cam = initialize_plot(canvas=canvas, cam=cam, elements=elements, title=title)
+    else:
+        canvas = view.canvas
+        cam = view.camera
+
+    if not hold_on:
+        rm_visuals(view)
+   
     # Establish element lines
     if len(unsel_elements)>0:
         element_lines = [None]*len(unsel_elements)
@@ -75,7 +98,7 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
 
         element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **el_settings)
         view.add(element_visual)
-
+ 
     # Establish selected element lines
     if len(sel_elements)>0:
         element_lines = [None]*len(sel_elements)
@@ -89,7 +112,7 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     if overlay_deformed:
         element_lines = [None]*len(elements)
         for ix, el in enumerate(elements):
-            element_lines[ix] = np.vstack([node.x[:2] for node in el.nodes])
+            element_lines[ix] = np.vstack([node.x[:3] for node in el.nodes])
 
         element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **def_el_settings)
         view.add(element_visual)
@@ -150,14 +173,19 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     canvas.show()
     axis = scene.visuals.XYZAxis(parent=view.scene)
 
-    return axis
+    return canvas, view
     
     
 
 def plot_elements_legacy(elements, color='Gray', plot_nodes=False, highlighted_nodes=None, node_labels=False, 
          element_labels=False, fig=None, ax=None, element_settings={},
          node_settings={}, node_label_settings={}, element_label_settings={}):
-        
+         
+    # import matplotlib.pyplot as plt
+    # import matplotlib
+    # from mpl_toolkits.mplot3d import Axes3D
+    # from mpl_toolkits.mplot3d.art3d import Line3DCollection as LC
+
     e_dict = {'color': 'DarkGreen', 'alpha': 1}
     e_dict.update(**element_settings)
 

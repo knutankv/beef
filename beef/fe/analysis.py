@@ -1,6 +1,5 @@
-from . import *
-from . import plotters
 from copy import deepcopy as copy
+import numpy as np
 
 #%% Analysis class definition
 class Analysis:

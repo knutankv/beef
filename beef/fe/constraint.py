@@ -1,4 +1,4 @@
-from . import *
+import numpy as np
 
 #%% Constraint class definition
 class Constraint:

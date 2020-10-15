@@ -1,3 +1,5 @@
+import numpy as np
+
 class Results:
     def __init__(self, analysis, element_results=['M', 'N', 'V'], node_results=[]):
         self.analysis = copy(analysis)

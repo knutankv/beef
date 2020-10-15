@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 import numpy as np
-from . import plotters
 from .node import *
 from .element import *
 from .section import *
 from scipy.linalg import null_space as null
-from ..general import ensure_list, sync_ixs
+from ..general import ensure_list
 from copy import deepcopy as copy
 
 class ElDef:
@@ -41,12 +40,10 @@ class ElDef:
         return f'BEEF ElDef ({len(self.nodes)} nodes, {len(self.elements)} elements)'
 
     # ADDITIONAL
-    def plot(self, **kwargs):        
-        return plotters.plot_elements(self.elements, **kwargs)      
+    def plot(self, **kwargs):       
+        from ..plot import plot_elements 
+        return plot_elements(self.elements, **kwargs)      
     
-    def update_u_plot(self, u_handle, u):
-        plotters.update_plot_u_eldef(self, u_handle, u)
-
     # ASSIGNMENT AND PREPARATION METHODS
     def assemble(self):
         self.assign_node_dofcounts() # ? 
@@ -143,8 +140,11 @@ class ElDef:
 
 
     def get_element(self, element_label):
-        ix = np.where(self.element_labels()==element_label)[0][0].astype(int)
-        return self.elements[ix]
+        if element_label in self.elements:
+            ix = np.where(self.element_labels()==element_label)[0][0].astype(int)
+            return self.elements[ix]
+        else:
+            return None
               
         
     def node_label_to_node_ix(self, node_label):
@@ -165,7 +165,12 @@ class ElDef:
             node.x = node.x0 + node.u
 
         for element in self.elements:
+            element.update_geometry()
             element.update()
+
+    def update_all_geometry(self):
+        for element in self.elements:
+            element.update_geometry()
 
 
     # GET METHODS
@@ -246,7 +251,7 @@ class ElDef:
         
         return t_mat
 
-    def get_kg(self):
+    def get_kg(self, N=None):
         ndim = len(self.get_node_labels())*6
         kg_eldef = np.zeros([ndim, ndim])
         
@@ -258,8 +263,7 @@ class ElDef:
             glob_dofs = np.r_[el.nodes[0].global_dofs, el.nodes[1].global_dofs].astype(int)
             local_dofs = np.r_[0:len(el.nodes[0].global_dofs), 6:6+len(el.nodes[1].global_dofs)]    #added for cases where one node in element is not present in self.nodes, check speed effect later
 
-
-            kg_eldef[np.ix_(glob_dofs, glob_dofs)] += el.get_kg()[np.ix_(local_dofs, local_dofs)]
+            kg_eldef[np.ix_(glob_dofs, glob_dofs)] += el.get_kg(N=N)[np.ix_(local_dofs, local_dofs)]
             
             if np.any(np.isnan(el.get_kg()[np.ix_(local_dofs, local_dofs)])):
                 print(el)
@@ -388,8 +392,8 @@ class Assembly(ElDef):
             
     
 class Part(ElDef):
-    def __init__(self, node_matrix, element_matrix, sections=None, constraints=None, **kwargs):      
-        nodes, elements = create_nodes_and_elements(node_matrix, element_matrix, sections=sections)
+    def __init__(self, node_matrix, element_matrix, sections=None, constraints=None, left_handed_csys=False, **kwargs):      
+        nodes, elements = create_nodes_and_elements(node_matrix, element_matrix, sections=sections, left_handed_csys=left_handed_csys)
         if node_matrix.shape[1] == 3:
             domain = '2d'
         elif node_matrix.shape[1] == 4:
@@ -407,7 +411,7 @@ def create_nodes(node_matrix):
     
     return nodes
 
-def create_nodes_and_elements(node_matrix, element_matrix, sections=None):
+def create_nodes_and_elements(node_matrix, element_matrix, sections=None, left_handed_csys=False):
     nodes = create_nodes(node_matrix)
     node_labels = np.array([node.label for node in nodes])
     
@@ -428,5 +432,5 @@ def create_nodes_and_elements(node_matrix, element_matrix, sections=None):
         ix1 = np.where(node_labels==el_node_label[0])[0][0]
         ix2 = np.where(node_labels==el_node_label[1])[0][0]
 
-        elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix])
+        elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
     return nodes, elements

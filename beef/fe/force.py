@@ -1,5 +1,5 @@
-from . import *
 from scipy.interpolate import interp1d
+import numpy as np
 
 #%% Load class definition 
 class Force:
