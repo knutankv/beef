@@ -36,34 +36,3 @@ class Dashpot(Feature):
 class PointMass(Feature):
     def __init__(self, node_label, dof_ixs, m):
         super().__init__('m', node_label, dof_ixs, m)
-
-
-# class Pontoon(Feature):  #group of added matrices
-#     def __init__(self, node, pontoon_type, orientation=np.eye(3), name='pontoon-0'):
-#         super().__init__(node, 'all', 'pontoon', name=name)
-#         self.orientation = orientation
-        
-#     @classmethod
-#     def assign_multiple(cls, nodes, pontoon_types, orientations=np.eye(3), prefix_label='pontoon-'):
-#         pontoon_types = ensure_list(pontoon_types)
-#         orientations = ensure_list(orientations)
-        
-#         if len(pontoon_types) == 1:
-#             pontoon_types = pontoon_types*len(nodes)
-            
-#         if len(orientations) == 1:
-#             orientations = orientations*len(nodes)
-        
-#         pontoons = [None]*len(nodes)
-#         for ix, node in enumerate(nodes):
-#             label = prefix_label+str(ix+1)
-#             pontoons[ix] = cls(node, pontoon_types[ix], orientation=orientations[ix], label=label)            
-    
-#         return pontoons
-    
-# class PontoonType:
-#     def __init__(self, K=None, C=None, M=None, omega=None):
-#         self.K = K
-#         self.C = C
-#         self.M = M
-#         self.omega = omega

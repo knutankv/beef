@@ -392,8 +392,11 @@ class Assembly(ElDef):
             
     
 class Part(ElDef):
-    def __init__(self, node_matrix, element_matrix, sections=None, constraints=None, left_handed_csys=False, **kwargs):      
-        nodes, elements = create_nodes_and_elements(node_matrix, element_matrix, sections=sections, left_handed_csys=left_handed_csys)
+    def __init__(self, node_matrix, element_matrix, sections=None, constraints=None, element_types=None, left_handed_csys=False, **kwargs):      
+        if element_types == None:
+            element_types = ['beam']*element_matrix.shape[0] # assume that all are beam
+
+        nodes, elements = create_nodes_and_elements(node_matrix, element_matrix, sections=sections, left_handed_csys=left_handed_csys, element_types=element_types)
         if node_matrix.shape[1] == 3:
             domain = '2d'
         elif node_matrix.shape[1] == 4:
@@ -411,7 +414,7 @@ def create_nodes(node_matrix):
     
     return nodes
 
-def create_nodes_and_elements(node_matrix, element_matrix, sections=None, left_handed_csys=False):
+def create_nodes_and_elements(node_matrix, element_matrix, sections=None, left_handed_csys=False, element_types=None):
     nodes = create_nodes(node_matrix)
     node_labels = np.array([node.label for node in nodes])
     
@@ -432,5 +435,10 @@ def create_nodes_and_elements(node_matrix, element_matrix, sections=None, left_h
         ix1 = np.where(node_labels==el_node_label[0])[0][0]
         ix2 = np.where(node_labels==el_node_label[1])[0][0]
 
-        elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
+        if element_types[el_ix] == 'beam':
+            elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
+        elif element_types[el_ix] == 'bar':
+            # Currently only added to enable extraction of Kg for bars - not supported fully (assumed as beams otherwise)
+            elements[el_ix] = BarElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
+        
     return nodes, elements
