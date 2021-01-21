@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.linalg import null_space as null
-from knutils import intersect_as_matlab as intersect_as_matlab
+# from knutils import intersect_as_matlab as intersect_as_matlab
 
 #%% General functions
 def n2d_ix(node_ixs, n_dofs=6):
@@ -275,9 +275,9 @@ def basic_coupled():
     return np.array([[1, -1], [-1, 1]])
 
 
-def sync_ixs(part_nodes, nodes_phi):
-    __, keep_ix_part_nodes, keep_ix_phi = intersect_as_matlab(part_nodes, nodes_phi)  
-    keep_dof_ix_phi = np.hstack([np.arange(ix*6, ix*6+6) for ix in keep_ix_phi])
+# def sync_ixs(part_nodes, nodes_phi):
+#     __, keep_ix_part_nodes, keep_ix_phi = intersect_as_matlab(part_nodes, nodes_phi)  
+#     keep_dof_ix_phi = np.hstack([np.arange(ix*6, ix*6+6) for ix in keep_ix_phi])
 
-    return keep_ix_part_nodes, keep_dof_ix_phi
+#     return keep_ix_part_nodes, keep_dof_ix_phi
 
