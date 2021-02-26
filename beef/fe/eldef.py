@@ -116,7 +116,7 @@ class ElDef:
     def get_element_subset(self, elements):
         subset = copy(self)
         subset.elements = [element for element in self.elements if element in elements]
-        subset.nodes = [item for sublist in [el.nodes for el in subset.elements] for item in sublist]
+        subset.nodes = list(set([item for sublist in [el.nodes for el in subset.elements] for item in sublist]))
         subset.assign_node_dofcounts()
         subset.assign_global_dofs()
         return subset
@@ -124,7 +124,7 @@ class ElDef:
     def get_elements_with_nodes(self, node_label_list, return_only_labels=False):
         els = []
         for element in self.elements:
-            nodes_in_use = [node_label for node_label in element.node_labels() if node_label in node_label_list]
+            nodes_in_use = [node_label for node_label in element.get_nodelabels() if node_label in node_label_list]
             if len(nodes_in_use)>0:
                 els.append(element)
         
