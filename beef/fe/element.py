@@ -371,9 +371,9 @@ class BeamElement3d(BeamElement):
             node.u = np.zeros(6)
 
     # ------------- GEOMETRY -----------------------------
-    def get_tmat_rhs(self):
+    def get_tmat_rhs(self, reps=4):
         T0 = transform_unit(self.get_e(), self.get_e2())
-        return blkdiag(T0, 4)
+        return blkdiag(T0, reps)
     
     def get_tmat_lhs(self):
         T0 = transform_unit(self.get_e(), self.get_e2())

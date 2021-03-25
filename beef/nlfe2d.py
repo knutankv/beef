@@ -1,5 +1,5 @@
 from scipy.linalg import block_diag, null_space as null, solve
-
+import numpy as np
 from knutils.tools import print_progress as pprogress, clear_progress
 from beef import newmark
 from beef.newmark import is_converged, factors_from_alpha

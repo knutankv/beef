@@ -1,4 +1,5 @@
 import numpy as np
+from ..general import convert_dofs_list
 
 #%% Constraint class definition
 class Constraint:
