@@ -895,7 +895,9 @@ class Part:
         self.Linv = dof_pairs_to_Linv(self.dof_pairs, len(self.nodes)*3)
         
         self.constrained_dofs = self.dof_pairs[self.dof_pairs[:,1]==None, 0]
-        self.unconstrained_dofs = np.delete(np.arange(0, np.shape(self.B)[1]), self.constrained_dofs)
+        all_dofs = np.arange(0, np.shape(self.B)[1])
+        self.unconstrained_dofs = all_dofs[~np.in1d(all_dofs,self.constrained_dofs)]
+
                 
         # Properties treatment (copy properties if not list)
         if type(properties) is not list:
