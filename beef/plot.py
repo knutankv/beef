@@ -1,67 +1,180 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
-from mpl_toolkits.mplot3d import Axes3D
-from mpl_toolkits.mplot3d.art3d import Line3DCollection as LC
+import vispy
+vispy.use('PyQt5')
+from vispy import visuals, scene
+from copy import deepcopy
 
+def rm_visuals(view):
+    for child in view.children[0].children:
+        if type(child) in [scene.Line, scene.visuals.Markers, scene.Text]:
+            child.parent = None        
 
-def plot_elements(elements, color='Gray', plot_nodes=False, highlighted_nodes=None, node_labels=False, 
-         element_labels=False, fig=None, ax=None, element_settings={},
-         node_settings={}, node_label_settings={}, element_label_settings={}):
-        
-    e_dict = {'color': 'DarkGreen', 'alpha': 1}
-    e_dict.update(**element_settings)
+def initialize_plot(canvas={}, view=None, cam={}, elements=None, title='BEEF Element plot'):
+    if elements is not None:
+        nodes = list(set([a for b in [el.nodes for el in elements] for a in b])) #flat list of unique nodes
+        node_pos = np.vstack([node.coordinates for node in nodes])
+        global_cog = np.mean(node_pos, axis=0)
+    else: 
+        global_cog = np.array([0,0,0])
 
-    n_dict = {'color':'Black', 'linestyle':'', 'marker':'.', 'markersize':4, 'alpha':0.8}
-    n_dict.update(**node_settings)
-
-    l_n_dict = {'color':'Black', 'fontsize': 8, 'fontweight':'normal'}
-    l_n_dict.update(**node_label_settings)
-    
-    l_e_dict = {'color':'LimeGreen', 'fontsize': 8, 'fontweight':'bold', 'style':'italic'}
-    l_e_dict.update(**element_label_settings)
-
-    if ax is None and fig is None:
-        fig = plt.gcf()
+    cam_settings = dict(up='z', fov=0, distance=2000, center=global_cog)    #standard values
             
-    if ax is None:
-        ax = fig.gca(projection='3d')
-    
-    element_lines = [None]*len(elements)
 
-    for ix, el in enumerate(elements):
-        element_lines[ix] = np.vstack([node.coordinates for node in el.nodes])
-        
-        if element_labels:
-            cog = el.cog
-            ax.text(cog[0], cog[1], cog[2], el.label, **l_e_dict)
-    
-    ax.add_collection(LC(element_lines, **e_dict))
+    if type(canvas) is not scene.SceneCanvas:
+        sc_settings = dict(bgcolor='white', title=title)
+        sc_settings.update(**canvas)
+        canvas = scene.SceneCanvas(**sc_settings)
 
-    nodes = [el.nodes for el in elements]
-    nodes = [a for b in nodes for a in b] #flatten
-    nodes = list(set(nodes))    #only keep unique
+    if view == None:    
+        view = canvas.central_widget.add_view()
+    else:
+        cam = view.camera
+
+    if type(cam) in [scene.cameras.TurntableCamera, scene.cameras.BaseCamera, scene.cameras.FlyCamera, scene.cameras.ArcballCamera, scene.cameras.PanZoomCamera, scene.cameras.Magnify1DCamera]:
+        view.camera = cam
+    else: # still a dict
+        cam_settings.update(**cam)
+        view.camera = scene.ArcballCamera(**cam_settings)
+
+    return view, canvas, view.camera
+
+def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements=None, canvas={}, hold_on=False, view=None, cam={}, tmat_scaling=1, plot_tmat_ax=None, plot_nodes=False, node_labels=False, element_labels=False, element_label_settings={}, node_label_settings={}, element_settings={}, node_settings={}, sel_node_settings={}, sel_element_settings={}, sel_node_label_settings={}, sel_element_label_settings={}, tmat_settings={}, deformed_element_settings={}, title='BEEF Element plot'):       
+    el_settings = dict(color='#008800')
+    el_settings.update(**element_settings)
+
+    def_el_settings = dict(color='#ff2288')
+    def_el_settings.update(**deformed_element_settings)
+
+    elsel_settings = dict(color='#ff0055',width=3)
+    elsel_settings.update(**sel_element_settings)
+
+    elsellab_settings = dict(color='#ff0055', bold=True, italic=False, face='OpenSans', font_size=10, anchor_x='left')
+    elsellab_settings.update(**sel_element_label_settings)
+
+    ellab_settings = dict(color='#008800', bold=False, italic=False, face='OpenSans', font_size=10, anchor_x='left')
+    ellab_settings.update(**element_label_settings)
+ 
+    n_settings = dict(face_color='#0000ff', edge_color=None, size=4)
+    n_settings.update(**node_settings)
+
+    nlab_settings = dict(color='#0000ff', bold=False, italic=False, face='OpenSans', font_size=10, anchor_x='left')
+    nlab_settings.update(**node_label_settings)
+
+    nsel_settings = dict(face_color='#ff0000', edge_color='#ff0000', size=8)
+    nsel_settings.update(**sel_node_settings)
+
+    nsellab_settings = dict(color='#ff0000', bold=True, italic=False, face='OpenSans', font_size=10, anchor_x='left')
+    nsellab_settings.update(**sel_node_label_settings)
     
-    if plot_nodes:
-        all_node_coords = np.vstack([node.coordinates for node in nodes])
-        ax.plot(all_node_coords[:,0], all_node_coords[:,1], all_node_coords[:,2], **n_dict)
+    tmat_colors = ['#0000ff', '#00ff00', '#ff0000']
+    tmatax_settings = dict(arrow_size=1)
+    tmatax_settings.update(**tmat_settings)
+
+    # Node coordinates
+    nodes = list(set([a for b in [el.nodes for el in elements] for a in b])) #flat list of unique nodes
+    node_pos = np.vstack([node.coordinates for node in nodes])
+
+    # Selected elements
+    if sel_elements is None:
+        sel_elements = []
+
+    unsel_elements = [el for el in elements if el.label not in sel_elements]
+    sel_elements = [el for el in elements if el.label in sel_elements]
     
-    if highlighted_nodes is not None:
-        node_labels = [node.label for node in nodes]
-        sel_nodes = [node for node in nodes if node.label in highlighted_nodes]
-        
+    if view is None:
+        view, canvas, cam = initialize_plot(canvas=canvas, cam=cam, elements=elements, title=title)
+    else:
+        canvas = view.canvas
+        cam = view.camera
+
+    if not hold_on:
+        rm_visuals(view)
+   
+    # Establish element lines
+    if len(unsel_elements)>0:
+        element_lines = [None]*len(unsel_elements)
+        for ix, el in enumerate(unsel_elements):
+            element_lines[ix] = np.vstack([node.coordinates for node in el.nodes])
+
+        element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **el_settings)
+        view.add(element_visual)
+ 
+    # Establish selected element lines
+    if len(sel_elements)>0:
+        element_lines = [None]*len(sel_elements)
+        for ix, el in enumerate(sel_elements):
+            element_lines[ix] = np.vstack([node.coordinates for node in el.nodes])
+
+        element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **elsel_settings)
+        view.add(element_visual)
+
+    # Overlay deformed plot if 
+    if overlay_deformed:
+        element_lines = [None]*len(elements)
+        for ix, el in enumerate(elements):
+            element_lines[ix] = np.vstack([node.x[:3] for node in el.nodes])
+
+        element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **def_el_settings)
+        view.add(element_visual)
+
+    # Establish element labels
+    if element_labels and len(unsel_elements)>0:
+        el_cog = [el.get_cog() for el in unsel_elements]
+        el_labels = [str(el.label) for el in unsel_elements]
+
+        element_label_visual = scene.Text(text=el_labels,  pos=el_cog, **ellab_settings)
+        view.add(element_label_visual)
+   
+    if len(sel_elements)>0:
+        el_cog = [el.get_cog() for el in sel_elements]
+        el_labels = [str(el.label) for el in sel_elements]
+
+        element_label_visual = scene.Text(text=el_labels,  pos=el_cog, **elsellab_settings)
+        view.add(element_label_visual)       
+
+
+    # Node labels
+    if node_labels:
+        node_labels = [str(node.label) for node in nodes]
+        element_label_visual = scene.Text(text=node_labels,  pos=node_pos, **nlab_settings)
+        view.add(element_label_visual)
+
+    # Nodes
+    if plot_nodes:  
+        node_visual = scene.visuals.Markers(pos=node_pos, **n_settings)
+        view.add(node_visual)
+
+    if sel_nodes is not None:
+        sel_nodes = [node for node in nodes if node.label in sel_nodes]
+        sel_node_labels = [str(node.label) for node in sel_nodes]        
+
         if len(sel_nodes) >= 1:
-            xy = np.vstack([node.coordinates for node in sel_nodes])
-            ax.plot(xy[:,0], xy[:,1], xy[:,2], '.r')
+            node_pos = np.vstack([node.coordinates for node in sel_nodes])
+            sel_node_label_visual = scene.Text(text=sel_node_labels,  pos=node_pos, **nsellab_settings)
+            sel_node_visual = scene.visuals.Markers(pos=node_pos, **nsel_settings)
+
+            view.add(sel_node_label_visual)
+            view.add(sel_node_visual)
         else:
             print('Requested nodes to highlight not found.')
-
     
-    if node_labels:
-        for node in nodes:
-            ax.text(node.coordinates[0], node.coordinates[1], node.coordinates[2], node.label, **l_n_dict)
+    # Add transformation matrices
+    if plot_tmat_ax is not None:
+        for ax in plot_tmat_ax:
+            el_vecs = np.vstack([element.tmat[ax, 0:3] for element in elements])*tmat_scaling
+            el_cogs = np.vstack([element.get_cog() for element in elements])
+            
+            # INTERTWINE TMAT AND ELCOGS
+            arrow_data = np.hstack([el_cogs, el_cogs+el_vecs])
+ 
+            tmat_visual = scene.Arrow(pos=arrow_data.reshape([el_vecs.shape[0]*2, 3]), color=tmat_colors[ax], arrow_color=tmat_colors[ax], connect='segments', arrows=arrow_data,**tmatax_settings)
+            view.add(tmat_visual)   
 
-    return ax
+    canvas.show()
+    axis = scene.visuals.XYZAxis(parent=view.scene)
+
+    return canvas, view
+
 
 def frame_creator(frames=30, repeats=1, swing=False, full_cycle=False):
     

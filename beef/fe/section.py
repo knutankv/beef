@@ -1,8 +1,9 @@
-from . import *
+import numpy as np
 
 #%% Section class method
 class Section:
-    def __init__(self, E=0, rho=0, A=0, I_y=0, I_z=0, 
+
+    def __init__(self, E=0, rho=0, A=0, I_y=0, I_z=None, 
                  poisson=0.3, m=None, G=None, kappa=1, J=0,
                  e2=None, shear_deformation=False, lumped_mass=False, name=None):
 
@@ -21,16 +22,14 @@ class Section:
         
         # Cross-section
         self.A = A
-        self.I_y = I_y
-        self.I_z = I_z
+        if I_z == None:
+            I_z = []
+        
+        self.I = np.hstack([I_y, I_z])
         self.J = J
         self.kappa = kappa
                 
-        # Beam direction
-        if e2 is not None:
-            e2 = np.array(e2)
-            
-        self.e2 = e2        
+        # Beam direction  
         self.shear_deformation = shear_deformation
         
         # Compute stuff

@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import numpy as np
-from . import _plotters
-from ._node import *
-from ._element import *
-from ._section import *
+from .node import *
+from .element import *
+from .section import *
 from scipy.linalg import null_space as null
 from ..general import ensure_list
+from copy import deepcopy as copy
 
 class ElDef:
     def __init__(self, nodes, elements, constraints=None, constraint_type='lagrange', domain='3d'):
@@ -14,6 +14,9 @@ class ElDef:
         self.assign_node_dofcounts()
         self.k, self.m, self.c, self.kg = None, None, None, None
         self.domain = domain
+
+        if set([el.domain for el in self.elements]) != set([domain]):
+            raise ValueError('Element domains has to match ElDef/Part/Assembly.')
         
         # Constraints
         self.constraints = constraints 
@@ -37,15 +40,30 @@ class ElDef:
         return f'BEEF ElDef ({len(self.nodes)} nodes, {len(self.elements)} elements)'
 
     # ADDITIONAL
-    def plot(self, **kwargs):        
-        return _plotters.plot_eldef_3d(self, **kwargs)      
+    def plot(self, **kwargs):       
+        from ..plot import plot_elements 
+        return plot_elements(self.elements, **kwargs)      
     
-    def update_u_plot(self, u_handle, u):
-        _plotters.update_plot_u_eldef(self, u_handle, u)
-
     # ASSIGNMENT AND PREPARATION METHODS
     def assemble(self):
+        self.assign_node_dofcounts() # ? 
+        self.assign_global_dofs()
         self.m, self.c, self.k, self.kg = self.global_element_matrices(constraint_type=self.constraint_type)
+
+    def discard_unused_elements(self): #only elements connected to two nodes are kept
+        discard_ix = []
+        for element in self.elements:
+            if (element.nodes[0] not in self.nodes) or (element.nodes[1] not in self.nodes):
+                discard_ix.append(self.elements.index(element))
+
+        self.elements = [self.elements[ix] for ix in range(len(self.elements)) if ix not in discard_ix]
+
+    def arrange_nodes(self, nodelabels):
+        self.nodes = self.get_nodes(nodelabels)
+
+    def assign_global_dofs(self):
+        for node in self.nodes:
+            node.global_dofs = self.node_label_to_dof_ix(node.label)
 
     def assign_node_dofcounts(self):
         for node in self.nodes:
@@ -57,17 +75,25 @@ class ElDef:
             
         self.ndofs = self.all_ndofs()
         
-            
+    
+    # NODE/DOF LOOKUP AND BOOKKEEPING METHODS      
     def all_ndofs(self):
         return np.array([node.ndofs for node in self.nodes])
     
-    
+    def in_part(self, nodelabels):
+        return np.isin(nodelabels, self.get_node_labels())
+
+    def in_list(self, nodelabels):
+        return np.isin(self.get_node_labels(), nodelabels)
+
     def get_node_labels(self):
         return np.array([node.label for node in self.nodes])
     
-    # NODE/DOF LOOKUP AND BOOKKEEPING METHODS      
-    def get_node(self, node_label):
-        return [node for node in self.nodes if node.label==node_label][0]
+    def get_node(self, nodelabel):
+        return self.nodes[self.nodes.index(int(nodelabel))]
+
+    def get_nodes(self, nodelabels):
+        return [self.nodes[self.nodes.index(int(nodelabel))] for nodelabel in nodelabels]
     
     def all_dof_ixs(self):
         # Ready for elements with fewer dofs per node!
@@ -80,11 +106,25 @@ class ElDef:
         dof_ix = np.arange(0, int(n_dofs))
         return dof_ix  
     
-    
+    def get_node_subset(self, nodes):
+        subset = copy(self)
+        subset.nodes = [node for node in self.nodes if node in nodes]
+        subset.discard_unused_elements()
+        subset.assign_global_dofs()
+        return subset
+        
+    def get_element_subset(self, elements):
+        subset = copy(self)
+        subset.elements = [element for element in self.elements if element in elements]
+        subset.nodes = list(set([item for sublist in [el.nodes for el in subset.elements] for item in sublist]))
+        subset.assign_node_dofcounts()
+        subset.assign_global_dofs()
+        return subset
+
     def get_elements_with_nodes(self, node_label_list, return_only_labels=False):
         els = []
         for element in self.elements:
-            nodes_in_use = [node_label for node_label in element.node_labels() if node_label in node_label_list]
+            nodes_in_use = [node_label for node_label in element.get_nodelabels() if node_label in node_label_list]
             if len(nodes_in_use)>0:
                 els.append(element)
         
@@ -100,8 +140,11 @@ class ElDef:
 
 
     def get_element(self, element_label):
-        ix = np.where(self.element_labels()==element_label)[0][0].astype(int)
-        return self.elements[ix]
+        if element_label in self.elements:
+            ix = np.where(self.element_labels()==element_label)[0][0].astype(int)
+            return self.elements[ix]
+        else:
+            return None
               
         
     def node_label_to_node_ix(self, node_label):
@@ -114,6 +157,20 @@ class ElDef:
         lower_dofs = sum(self.ndofs[:node_ix])
         dof_ix = lower_dofs + np.arange(0, self.ndofs[node_ix])
         return dof_ix
+
+    # MODIFIERS
+    def deform_part(self, u):
+        for node in self.nodes:
+            node.u = u[node.global_dofs]
+            node.x = node.x0 + node.u
+
+        for element in self.elements:
+            element.update_geometry()
+            element.update()
+
+    def update_all_geometry(self):
+        for element in self.elements:
+            element.update_geometry()
 
 
     # GET METHODS
@@ -194,25 +251,30 @@ class ElDef:
         
         return t_mat
 
-    def get_kg(self):
+    def get_kg(self, N=None):
         ndim = len(self.get_node_labels())*6
-
-        geometric_stiffness = np.zeros([ndim, ndim])
+        kg_eldef = np.zeros([ndim, ndim])
         
         for el in self.elements:
-            dof_ix1 = self.node_label_to_dof_ix(el.nodes[0].label)
-            dof_ix2 = self.node_label_to_dof_ix(el.nodes[1].label)
-            dof_range = np.r_[dof_ix1, dof_ix2]
+            if el.nodes[1].global_dofs is None:
+                print(el.nodes[1].global_dofs)
+                print(el.nodes[1])
+                
+            glob_dofs = np.r_[el.nodes[0].global_dofs, el.nodes[1].global_dofs].astype(int)
+            local_dofs = np.r_[0:len(el.nodes[0].global_dofs), 6:6+len(el.nodes[1].global_dofs)]    #added for cases where one node in element is not present in self.nodes, check speed effect later
 
-            T = el.tmat
-            geometric_stiffness[np.ix_(dof_range, dof_range)] += T.T @ el.get_kg() @ T
+            kg_eldef[np.ix_(glob_dofs, glob_dofs)] += el.get_kg(N=N)[np.ix_(local_dofs, local_dofs)]
+            
+            if np.any(np.isnan(el.get_kg()[np.ix_(local_dofs, local_dofs)])):
+                print(el)
+
                         
-        return geometric_stiffness
+        return kg_eldef
 
 
     # GENERATE OUTPUT FOR ANALYSIS    
     def global_element_matrices(self, constraint_type=None):
-        ndim = len(self.get_node_labels())*6
+        ndim = len(self.nodes)*6
         
         mass = np.zeros([ndim, ndim])
         stiffness = np.zeros([ndim, ndim])
@@ -223,14 +285,13 @@ class ElDef:
         # Should add possibility to add spring/dashpot between two nodes also.
 
         for el in self.elements:
-            dof_ix1 = self.node_label_to_dof_ix(el.nodes[0].label)
-            dof_ix2 = self.node_label_to_dof_ix(el.nodes[1].label)
+            dof_ix1, dof_ix2 = el.nodes[0].global_dofs, el.nodes[1].global_dofs
             dof_range = np.r_[dof_ix1, dof_ix2]
             T = el.tmat
             
-            mass[np.ix_(dof_range, dof_range)] += T.T @ el.get_m() @ T
-            stiffness[np.ix_(dof_range, dof_range)] += T.T @ el.get_k() @ T
-            geometric_stiffness[np.ix_(dof_range, dof_range)] += T.T @ el.get_kg() @ T
+            mass[np.ix_(dof_range, dof_range)] += el.get_m()
+            stiffness[np.ix_(dof_range, dof_range)] += el.get_k()
+            geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg()
         
         removed_ix = None  
         keep_ix = None
@@ -265,9 +326,9 @@ class ElDef:
     
     
     def elements_with_node(self, node_label, merge_parts=True, return_node_ix=True):
-        elements = [el for el in self.elements if node_label in el.node_labels()]  
+        elements = [el for el in self.elements if node_label in el.nodes]  
         
-        node_ix = [np.where(np.array(el.node_labels())==node_label)[0][0] for el in elements]
+        node_ix = [np.where(el.nodes==node_label)[0] for el in elements]
             
         if return_node_ix:
             return elements, node_ix
@@ -331,8 +392,11 @@ class Assembly(ElDef):
             
     
 class Part(ElDef):
-    def __init__(self, node_matrix, element_matrix, sections=None, constraints=None, **kwargs):      
-        nodes, elements = create_nodes_and_elements(node_matrix, element_matrix, sections=sections)
+    def __init__(self, node_matrix, element_matrix, sections=None, constraints=None, element_types=None, left_handed_csys=False, **kwargs):      
+        if element_types == None:
+            element_types = ['beam']*element_matrix.shape[0] # assume that all are beam
+
+        nodes, elements = create_nodes_and_elements(node_matrix, element_matrix, sections=sections, left_handed_csys=left_handed_csys, element_types=element_types)
         if node_matrix.shape[1] == 3:
             domain = '2d'
         elif node_matrix.shape[1] == 4:
@@ -350,7 +414,7 @@ def create_nodes(node_matrix):
     
     return nodes
 
-def create_nodes_and_elements(node_matrix, element_matrix, sections=None):
+def create_nodes_and_elements(node_matrix, element_matrix, sections=None, left_handed_csys=False, element_types=None):
     nodes = create_nodes(node_matrix)
     node_labels = np.array([node.label for node in nodes])
     
@@ -371,5 +435,10 @@ def create_nodes_and_elements(node_matrix, element_matrix, sections=None):
         ix1 = np.where(node_labels==el_node_label[0])[0][0]
         ix2 = np.where(node_labels==el_node_label[1])[0][0]
 
-        elements[el_ix] = BeamElement([nodes[ix1], nodes[ix2]], label=element_matrix[el_ix, 0], section=sections[el_ix])
+        if element_types[el_ix] == 'beam':
+            elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
+        elif element_types[el_ix] == 'bar':
+            # Currently only added to enable extraction of Kg for bars - not supported fully (assumed as beams otherwise)
+            elements[el_ix] = BarElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
+        
     return nodes, elements

@@ -1,4 +1,4 @@
-from . import *
+import numpy as np
 
 #%% Step class definitions
 class Step:
@@ -69,3 +69,7 @@ class StaticStep(Step):
         u = (np.linalg.inv(K) @ self.global_loads) 
         self.results['u'] = self.adjust_response_final(u) 
         self.results['R'] = -self.analysis.eldef.B.T @ u[-self.analysis.eldef.constraint_dof_count():, :] 
+
+class DynamicStep(Step):
+    pass
+    
