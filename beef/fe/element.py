@@ -56,6 +56,15 @@ class BeamElement:
             return psi, phi
         else:
             return psi
+    # ------------- ELEMENT MATRIX -----------------------
+    def get_kg(self, N=None):  # element level function (global DOFs)
+        return self.tmat.T @ self.get_local_kg(N=N) @ self.tmat
+
+    def get_m(self):
+        return self.tmat.T @ self.get_local_m() @ self.tmat
+    
+    def get_k(self):
+        return self.tmat.T @ self.get_local_k() @ self.tmat
 
     # ------------- FE UPDATING --------------------------
     def update_m(self):
@@ -221,7 +230,7 @@ class BeamElement2d(BeamElement):
 
     def local_m_timo(self):
         rho = self.section.m/self.section.A
-        I = self.section.I
+        I = self.section.I[1]
         L = self.L0
         A = self.section.A
         psi = self.psi
@@ -549,12 +558,7 @@ class BeamElement3d(BeamElement):
             ]) * N/L
     
     
-    
-    def get_kg(self, N=None):  # element level function (global DOFs)
-        return self.tmat.T @ self.get_local_kg(N=N) @ self.tmat
 
-    def get_m(self):
-        return self.tmat.T @ self.get_local_m() @ self.tmat
 
     # --------------- FE UPDATING ---------------------------------
     def update_linear(self):

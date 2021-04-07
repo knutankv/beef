@@ -4,7 +4,7 @@ from .node import *
 from .element import *
 from .section import *
 from scipy.linalg import null_space as null
-from ..general import ensure_list, compatibility_matrix as compmat
+from ..general import ensure_list, compatibility_matrix as compmat, lagrange_constrain
 from copy import deepcopy as copy
 
 class ElDef:
@@ -275,7 +275,7 @@ class ElDef:
 
     # GENERATE OUTPUT FOR ANALYSIS    
     def global_element_matrices(self, constraint_type=None):
-        ndim = len(self.nodes)*6
+        ndim = len(self.all_dof_ixs())
         
         mass = np.zeros([ndim, ndim])
         stiffness = np.zeros([ndim, ndim])
@@ -289,7 +289,7 @@ class ElDef:
             dof_ix1, dof_ix2 = el.nodes[0].global_dofs, el.nodes[1].global_dofs
             dof_range = np.r_[dof_ix1, dof_ix2]
             T = el.tmat
-            
+
             mass[np.ix_(dof_range, dof_range)] += el.get_m()
             stiffness[np.ix_(dof_range, dof_range)] += el.get_k()
             geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg()
