@@ -4,7 +4,7 @@ from .node import *
 from .element import *
 from .section import *
 from scipy.linalg import null_space as null
-from ..general import ensure_list
+from ..general import ensure_list, compatibility_matrix as compmat
 from copy import deepcopy as copy
 
 class ElDef:
@@ -14,6 +14,7 @@ class ElDef:
         self.assign_node_dofcounts()
         self.k, self.m, self.c, self.kg = None, None, None, None
         self.domain = domain
+        self.dim = 2 if domain=='2d' else 3
 
         if set([el.domain for el in self.elements]) != set([domain]):
             raise ValueError('Element domains has to match ElDef/Part/Assembly.')
@@ -234,7 +235,7 @@ class ElDef:
     def compatibility_matrix(self):
         dof_pairs = self.constraint_dof_ix()
         ndim = np.sum(self.ndofs)
-        compat_mat = compatibility_matrix(dof_pairs, ndim)
+        compat_mat = compmat(dof_pairs, ndim)
         
         return compat_mat   
     
@@ -417,7 +418,8 @@ def create_nodes(node_matrix):
 def create_nodes_and_elements(node_matrix, element_matrix, sections=None, left_handed_csys=False, element_types=None):
     nodes = create_nodes(node_matrix)
     node_labels = np.array([node.label for node in nodes])
-    
+    dim = node_matrix.shape[0]-1
+
     n_els = element_matrix.shape[0]
     elements = [None]*n_els
     
@@ -436,9 +438,13 @@ def create_nodes_and_elements(node_matrix, element_matrix, sections=None, left_h
         ix2 = np.where(node_labels==el_node_label[1])[0][0]
 
         if element_types[el_ix] == 'beam':
-            elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
+            if dim==3:
+                elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
+            else:
+                elements[el_ix] = BeamElement2d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix])
+
         elif element_types[el_ix] == 'bar':
-            # Currently only added to enable extraction of Kg for bars - not supported fully (assumed as beams otherwise)
+            # Currently only added to enable extraction of Kg for bars - not supported otherwise (assumed as beams otherwise)
             elements[el_ix] = BarElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
         
     return nodes, elements

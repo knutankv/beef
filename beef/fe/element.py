@@ -39,11 +39,16 @@ class BeamElement:
         return np.sqrt(np.sum(self.get_vec()**2))
 
     def get_psi(self, return_phi=True):
+        if self.domain=='2d':
+            I = self.section.I[1]
+        else:
+            I = self.section.I
+
         if (not hasattr(self, 'force_psi') or self.force_psi is None) and self.section.shear_deformation:
             denom = self.section.kappa*self.section.G*self.section.A*self.get_length()**2
-            phi = 12*self.section.E*self.section.I/denom
+            phi = 12*self.section.E*I/denom
         else:
-            phi = self.section.I*0
+            phi = I*0
         
         psi = 1/(1+phi)
         
@@ -75,6 +80,7 @@ class BeamElement2d(BeamElement):
         self.nodes = nodes
         self.label = int(label)
         self.section = section
+        
         self.shear_flexible = shear_flexible
         self.nonlinear = nonlinear
 
@@ -105,6 +111,7 @@ class BeamElement2d(BeamElement):
             self.update = self.update_linear
             self.get_local_k = self.local_k_linear
         
+        # Initialization function runs
         self.initiate_nodes()
         self.L0 = self.get_length()
         self.phi0 = self.get_element_angle()
@@ -136,7 +143,7 @@ class BeamElement2d(BeamElement):
     def get_tmat(self):
         T = np.eye(6)
         T[0, :2] = self.e
-        T[1, :2] = self.e2
+        T[1, :2] = self.get_e2()
 
         T[3, 3:5] = T[0, :2]
         T[4, 3:5] = T[1, :2]
@@ -148,17 +155,18 @@ class BeamElement2d(BeamElement):
         k_local = np.zeros([6,6])
         section = self.section
 
+
         k_local[:3, :3] = (1/self.L**3) * np.array([[section.E*section.A*self.L**2,-self.Q*self.L**2, 0],
-                                  [-self.Q*self.L**2, 12*self.psi*section.E*section.I+6/5*self.N*self.L**2, 6*self.psi*section.E*section.I*self.L+1/10*self.N*self.L**3],
-                                  [0, 6*self.psi*section.E*section.I*self.L+1/10*self.N*self.L**3, (3*self.psi+1)*section.E*section.I*self.L**2+2/15*self.N*self.L**4]])
+                                  [-self.Q*self.L**2, 12*self.psi*section.E*section.I[1]+6/5*self.N*self.L**2, 6*self.psi*section.E*section.I[1]*self.L+1/10*self.N*self.L**3],
+                                  [0, 6*self.psi*section.E*section.I[1]*self.L+1/10*self.N*self.L**3, (3*self.psi+1)*section.E*section.I[1]*self.L**2+2/15*self.N*self.L**4]])
 
         k_local[3:, 3:] = (1/self.L**3) * np.array([[section.E*section.A*self.L**2,-self.Q*self.L**2,0],
-                                  [-self.Q*self.L**2, 12*self.psi*section.E*section.I+6/5*self.N*self.L**2, -6*self.psi*section.E*section.I*self.L-1/10*self.N*self.L**3],
-                                  [0, -6*self.psi*section.E*section.I*self.L-1/10*self.N*self.L**3, (3*self.psi+1)*section.E*section.I*self.L**2+2/15*self.N*self.L**4]])
+                                  [-self.Q*self.L**2, 12*self.psi*section.E*section.I[1]+6/5*self.N*self.L**2, -6*self.psi*section.E*section.I[1]*self.L-1/10*self.N*self.L**3],
+                                  [0, -6*self.psi*section.E*section.I[1]*self.L-1/10*self.N*self.L**3, (3*self.psi+1)*section.E*section.I[1]*self.L**2+2/15*self.N*self.L**4]])
         
         k_local[:3, 3:] = (1/self.L**3) * np.array([[-section.E*section.A*self.L**2,self.Q*self.L**2,0],
-                                  [self.Q*self.L**2, -12*self.psi*section.E*section.I-6/5*self.N*self.L**2, 6*self.psi*section.E*section.I*self.L+1/10*self.N*self.L**3],
-                                  [0, -6*self.psi*section.E*section.I*self.L-1/10*self.N*self.L**3, (3*self.psi-1)*section.E*section.I*self.L**2-1/30*self.N*self.L**4]])
+                                  [self.Q*self.L**2, -12*self.psi*section.E*section.I[1]-6/5*self.N*self.L**2, 6*self.psi*section.E*section.I[1]*self.L+1/10*self.N*self.L**3],
+                                  [0, -6*self.psi*section.E*section.I[1]*self.L-1/10*self.N*self.L**3, (3*self.psi-1)*section.E*section.I[1]*self.L**2-1/30*self.N*self.L**4]])
         
         k_local[3:, :3] = k_local[0:3,3:].T
         
@@ -170,16 +178,16 @@ class BeamElement2d(BeamElement):
         section = self.section
 
         k_local[:3, :3] = (1/self.L0**3) * np.array([[section.E*section.A*self.L0**2,0, 0],
-                                  [0, 12*self.psi*section.E*section.I, 6*self.psi*section.E*section.I*self.L0],
-                                  [0, 6*self.psi*section.E*section.I*self.L0, (3*self.psi+1)*section.E*section.I*self.L0**2]])
+                                  [0, 12*self.psi*section.E*section[1], 6*self.psi*section.E*section.I[1]*self.L0],
+                                  [0, 6*self.psi*section.E*section[1]*self.L0, (3*self.psi+1)*section.E*section.I[1]*self.L0**2]])
 
         k_local[3:, 3:] = (1/self.L0**3) * np.array([[section.E*section.A*self.L0**2,0,0],
-                                  [0, 12*self.psi*section.E*section.I, -6*self.psi*section.E*section.I*self.L0],
-                                  [0, -6*self.psi*section.E*section.I*self.L0, (3*self.psi+1)*section.E*section.I*self.L0**2]])
+                                  [0, 12*self.psi*section.E*section.I[1], -6*self.psi*section.E*section.I[1]*self.L0],
+                                  [0, -6*self.psi*section.E*section.I[1]*self.L0, (3*self.psi+1)*section.E*section.I[1]*self.L0**2]])
         
         k_local[:3, 3:] = (1/self.L0**3) * np.array([[-section.E*section.A*self.L0**2,0,0],
-                                  [0, -12*self.psi*section.E*section.I, 6*self.psi*section.E*section.I*self.L0],
-                                  [0, -6*self.psi*section.E*section.I*self.L0, (3*self.psi-1)*section.E*section.I*self.L0**2]])
+                                  [0, -12*self.psi*section.E*section.I[1], 6*self.psi*section.E*section.I[1]*self.L0],
+                                  [0, -6*self.psi*section.E*section.I[1]*self.L0, (3*self.psi-1)*section.E*section.I[1]*self.L0**2]])
         
         k_local[3:, :3] = k_local[0:3,3:].T
         
@@ -295,8 +303,8 @@ class BeamElement2d(BeamElement):
         section = self.section
         Kd_c = 1/self.L * np.array([
             [section.E*section.A, 0, 0], 
-            [0, section.E*section.I, 0],
-            [0, 0, 3*self.psi*section.E*section.I]])
+            [0, section.E*section.I[1], 0],
+            [0, 0, 3*self.psi*section.E*section.I[1]]])
         
         return Kd_c
 
@@ -386,8 +394,7 @@ class BeamElement3d(BeamElement):
         
         return blkdiag(T_r2l, 2) @ blkdiag(T0, 4)
         
-    
-    
+
     def get_e2(self):
         if self.e2 is None:
             smallest_ix = np.argmin(abs(self.e))
