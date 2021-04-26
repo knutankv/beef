@@ -4,7 +4,7 @@ from .node import *
 from .element import *
 from .section import *
 from scipy.linalg import null_space as null
-from ..general import ensure_list, compatibility_matrix as compmat, lagrange_constrain
+from ..general import ensure_list, compatibility_matrix as compmat, lagrange_constrain, gdof_ix_from_nodelabels
 from copy import deepcopy as copy
 
 class ElDef:
@@ -22,6 +22,8 @@ class ElDef:
         # Constraints
         self.constraints = constraints 
         self.constraint_type = constraint_type
+        self.dof_pairs = self.constraint_dof_ix()               #PATCH for compatibility with nlfe2d module
+        self.gdof_ix_from_nodelabels = lambda node_labels, dof_ix: gdof_ix_from_nodelabels(self.get_node_labels(), node_labels, dof_ix=dof_ix)  #PATCH for compatibility with nlfe2d module
         
         if len(set(self.get_node_labels()))!=len(self.get_node_labels()):
             raise ValueError('Non-unique node labels defined.')
@@ -418,7 +420,7 @@ def create_nodes(node_matrix):
 def create_nodes_and_elements(node_matrix, element_matrix, sections=None, left_handed_csys=False, element_types=None):
     nodes = create_nodes(node_matrix)
     node_labels = np.array([node.label for node in nodes])
-    dim = node_matrix.shape[0]-1
+    dim = node_matrix.shape[1]-1
 
     n_els = element_matrix.shape[0]
     elements = [None]*n_els

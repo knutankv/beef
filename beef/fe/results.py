@@ -1,4 +1,5 @@
 import numpy as np
+from copy import deepcopy as copy
 
 class Results:
     def __init__(self, analysis, element_results=['M', 'N', 'V'], node_results=[]):
