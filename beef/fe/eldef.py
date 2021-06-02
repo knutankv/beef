@@ -192,7 +192,7 @@ class ElDef:
     # CONSTRAINT METHODS   
     def constraint_dof_ix(self):        
         if self.constraints is None:
-            raise ValueError("Can't output constraint DOF indices as no constraints are given.")
+            return None
 
         c_dof_ix = []
         
