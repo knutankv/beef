@@ -53,6 +53,10 @@ class ElDef:
         self.update_mass_matrix()
         self.c = self.feature_mats['c']
 
+    @property
+    def n_dofs(self):
+        return np.sum([node.ndofs for node in self.nodes])
+
 
     def global_matrices_from_features(self):
         n_dofs = np.shape(self.B)[1]
@@ -197,7 +201,7 @@ class ElDef:
         return dof_ix
 
     # MODIFIERS
-    def deform_part(self, u):
+    def deform(self, u):
         for node in self.nodes:
             node.u = u[node.global_dofs]
             node.x = node.x0 + node.u
@@ -206,31 +210,38 @@ class ElDef:
             element.update_geometry()
             element.update()
 
+        self.update_tangent_stiffness()
+        self.update_internal_forces()
+
+    def deform_linear(self, u):
+        for node in self.nodes:
+            node.u = u[node.global_dofs]
+            node.x = node.x0 + node.u
+
+        for element in self.elements:
+            element.update_linear()    
+
+        self.update_internal_forces(u)      # on part level (element internal forces are dealt with intristicly by update function above)
+    
+
     def update_all_geometry(self):
         for element in self.elements:
             element.update_geometry()
 
     def update_internal_forces(self, u=None):       # on part level
-        node_labels = self.get_node_labels()
-        ndim = len(node_labels)*3           #needs adjustment to account for 3d
         if u is None:
-            u = np.zeros([ndim])
+            u = np.zeros([self.n_dofs])
 
         if hasattr(self, 'feature_mats'):
             self.q = self.feature_mats['k'] @ u   
         else:
             self.q = u*0
 
-        for el_ix, el in enumerate(self.elements):
-            node_ix1 = np.where(node_labels == el.nodes[0].label)[0][0]
-            node_ix2 = np.where(node_labels == el.nodes[1].label)[0][0]
-            ixs = np.hstack([node_ix1*3+np.arange(0,3), node_ix2*3+np.arange(0,3)])
-
+        for el in self.elements:
+            ixs = np.hstack([el.nodes[0].global_dofs, el.nodes[1].global_dofs])
             self.q[ixs] += el.q
 
     def update_tangent_stiffness(self):
-        node_labels = self.get_node_labels()
-        ndim = len(node_labels)*3                #needs adjustment to account for 3d
         self.k = self.feature_mats['k']*1          
         
         for el in self.elements:
@@ -238,8 +249,6 @@ class ElDef:
 
     
     def update_mass_matrix(self):
-        node_labels = self.get_node_labels()
-        ndim = len(node_labels)*3            #needs adjustment to account for 3d
         self.m = self.feature_mats['m']*1   
 
         for el in self.elements:
@@ -281,18 +290,6 @@ class ElDef:
                 
         c_dof_ix = np.vstack(c_dof_ix)
         return c_dof_ix
-    
-    
-    # def unwrap_primal_constraint_dofs(self):
-    #     dof_pairs = self.constraint_dof_ix()
-        
-    #     mask_gnd = dof_pairs[:,1]==None     #mask for grounded
-    #     mask_slave = dof_pairs[:,1]!=None   #mask for node-to-node
-
-    #     dofs_to_remove = np.unique(np.hstack([dof_pairs[mask_gnd,0], dof_pairs[mask_slave,1]]))    #grounded master nodes and slave nodes
-    #     equal_dofs = dof_pairs[mask_slave,:].astype(int)
-
-    #     return dofs_to_remove, equal_dofs
     
     
     def constraint_dof_count(self):
@@ -409,7 +406,7 @@ class ElDef:
             return elements     
         
         
-    def export_eldef(self, part_ix=None):
+    def export_matrices(self, part_ix=None):
         
         if part_ix is None:
             els = self.elements

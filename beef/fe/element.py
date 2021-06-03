@@ -79,13 +79,19 @@ class BeamElement:
     def update_k(self):
         self.k = self.tmat.T @ self.get_local_k() @ self.tmat
 
-    # --------------- MISC --------------------------------
-    def get_nodelabels(self):
+    # ---------------- NODE-BASED PROPERTIES --------------
+    @property
+    def nodelabels(self):
         return [node.label for node in self.nodes]
 
     @property
     def global_dofs(self):
         return np.hstack([node.global_dofs for node in self.nodes])
+
+    @property
+    def u(self):
+        return np.hstack([node.u for node in self.nodes])
+        
 
 class BeamElement2d(BeamElement):
     def __init__(self, nodes, label, section=Section(), shear_flexible=False, mass_formulation='timoshenko', nonlinear=True, N0=0):

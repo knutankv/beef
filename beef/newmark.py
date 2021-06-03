@@ -99,14 +99,14 @@ def acc_estimate(K, C, M, f, udot, u=None, f_int=None, dt=None, beta=None, gamma
         if u is not None:
             f_int = K @ u
         else:
-            raise ValueError('Input either f_int or u!')
+            raise ValueError('Input _either_ f_int or u!')
 
     acc = solve(M, f - C @ udot - f_int)
 
     return acc
 
 
-def pred(u, udot, uddot, dt):
+def pred(u, udot, uddot, dt, beta=0, gamma=0):
     """
     Predictor step in non-linear Newmark algorithm.
 
@@ -120,7 +120,16 @@ def pred(u, udot, uddot, dt):
         Current acceleration (time step k), ndofs-by-1 Numpy array.
     dt : double
         Current time step, from k to k+1.
-
+    beta : double
+        Beta Newmark parameter. In Chatzi implementation, 
+        this is included in predictor as well as corrector - in Krenk, 
+        it is only used in corrector. The chosen values (0) are based
+        on Krenk's approach.
+    gamma : double
+        gamma Newmark parameter. In Chatzi implementation, 
+        this is included in predictor as well as corrector - in Krenk, 
+        it is only used in corrector. The chosen values (0) are based
+        on Krenk's approach.
 
     Returns:
     -----------
@@ -133,9 +142,9 @@ def pred(u, udot, uddot, dt):
         (Input uddot is output without modifications)
 
     """
-    du = dt*udot + 0.5*dt**2*uddot
+    du = dt*udot + (0.5-beta)*dt**2*uddot
     u = u + du
-    udot = udot + dt*uddot
+    udot = udot + (1-gamma)*dt*uddot
 
     return u, udot, uddot, du
 
@@ -237,10 +246,9 @@ def corr_alt(r, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=0.0):
     """
     Meff = effective_mass(M, C, K, dt, gamma, beta, alpha)
     duddot = solve(Meff, r)
-    
     uddot = uddot + duddot
+
     udot = udot + duddot*gamma*dt
-    
     du = duddot * beta*dt**2
     u = u + du
    

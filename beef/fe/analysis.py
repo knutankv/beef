@@ -14,8 +14,8 @@ else:
 
 #%% Analysis class definition
 class Analysis:
-    def __init__(self, assembly, steps=None, constraint_type='lagrange'):
-        self.eldef = copy(assembly) # keep a copy of the assembly - avoid tampering with original assembly
+    def __init__(self, eldef, steps=None, constraint_type='lagrange'):
+        self.eldef = copy(eldef) # keep a copy of the assembly - avoid tampering with original assembly
         self.steps = steps
         self.ready = False
         self.constraint_type = constraint_type
@@ -26,10 +26,10 @@ class Analysis:
 
     # CORE METHODS
     def __str__(self):
-        return f'BEEF Analysis ({len(self.steps)} steps, {self.assembly} assembly)'
+        return f'BEEF Analysis ({len(self.steps)} steps, {self.eldef} element definition)'
 
     def __repr__(self):
-        return f'BEEF Analysis ({len(self.steps)} steps, {self.assembly} assembly)'
+        return f'BEEF Analysis ({len(self.steps)} steps, {self.eldef} element definition)'
 
     # USEFUL
     def prepare(self):
@@ -104,25 +104,25 @@ class Analysis:
 ## New code placed here ##
 
 class AnalysisCR:
-    def __init__(self, part, forces=None, prescribed_displacements=None, tmax=1, dt=1, itmax=10, t0=0, tol=None, nr_modified=False, newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, outputs=['u'], tol_fun=np.linalg.norm):
+    def __init__(self, eldef, forces=None, prescribed_displacements=None, tmax=1, dt=1, itmax=10, t0=0, tol=None, nr_modified=False, newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, outputs=['u'], tol_fun=np.linalg.norm):
         if forces is None:
             forces = []
         if prescribed_displacements is None:
             prescribed_displacements = []
 
-        self.part = copy(part)  #create copy of part, avoid messing with original part definition
+        
+        self.eldef = copy(eldef)  #create copy of part, avoid messing with original part definition
+        
         self.forces = forces
         self.prescr_disp = prescribed_displacements
         self.t = np.arange(t0, tmax+dt, dt)
         self.itmax = itmax
-        # Change later:
-        # self.dof_pairs = np.vstack([self.part.dof_pairs, self.get_dof_pairs_from_prescribed_displacements()])
-        self.dof_pairs = self.part.dof_pairs
-        
-        self.B = compatibility_matrix(self.dof_pairs, len(self.part.nodes)*3)
-        self.L = null(self.B) 
-        self.Linv = dof_pairs_to_Linv(self.dof_pairs, len(self.part.nodes)*3)
 
+        # Change later:
+        # self.dof_pairs = np.vstack([self.eldef.dof_pairs, self.get_dof_pairs_from_prescribed_displacements()])
+        self.dof_pairs = self.eldef.dof_pairs
+        self.Linv = dof_pairs_to_Linv(self.dof_pairs, len(self.eldef.nodes)*3)
+        
         min_dt = np.min(np.array([force.min_dt for force in self.forces+self.prescr_disp]))
 
         if len(self.t)==1:
@@ -150,32 +150,30 @@ class AnalysisCR:
 
 
     def get_dof_pairs_from_prescribed_displacements(self):
-        prescr_ix = [np.hstack([self.part.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(pd.node_labels, pd.dof_ix)]).flatten() for pd in self.prescr_disp]
+        prescr_ix = [np.hstack([self.eldef.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(pd.node_labels, pd.dof_ix)]).flatten() for pd in self.prescr_disp]
         dof_pairs = np.vstack([[pi, None] for pi in prescr_ix])
         return dof_pairs
         
 
     def get_global_forces(self, t):  
-        n_dofs = len(self.part.nodes)*3 
-        glob_force = np.zeros(n_dofs)
+        glob_force = np.zeros(self.eldef.n_dofs)
         for force in self.forces:
-            dof_ix = np.hstack([self.part.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(force.node_labels, force.dof_ix)]).flatten()
+            dof_ix = np.hstack([self.eldef.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(force.node_labels, force.dof_ix)]).flatten()
             glob_force[dof_ix] += force.evaluate(t)
         
         return glob_force
 
     def get_global_prescribed_displacement(self, t):  
-        n_dofs = len(self.part.nodes)*3 
-        glob_displacement = np.zeros(n_dofs)
+        glob_displacement = np.zeros(self.eldef.n_dofs)
         dof_ix_full = []
         for pd in self.prescr_disp:
-            dof_ix_add = np.hstack([self.part.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(pd.node_labels, pd.dof_ix)]).flatten()
+            dof_ix_add = np.hstack([self.eldef.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(pd.node_labels, pd.dof_ix)]).flatten()
             glob_displacement[dof_ix_add] += pd.evaluate(t)
             dof_ix_full.append(dof_ix_add)
 
         if len(dof_ix_full) != 0:
             dof_ix_full = np.hstack(dof_ix_full)
-            dof_ix = np.hstack([np.where(self.part.unconstrained_dofs == dof)[0] for dof in dof_ix_full])    # relative to unconstrained dofs
+            dof_ix = np.hstack([np.where(self.eldef.unconstrained_dofs == dof)[0] for dof in dof_ix_full])    # relative to unconstrained dofs
 
         return glob_displacement[dof_ix_full], dof_ix
 
@@ -187,34 +185,33 @@ class AnalysisCR:
 
     def run_dynamic(self, print_progress=True, return_results=False):
         # Retrieve constant defintions
-        L = self.L
+        L = self.eldef.L
         Linv = self.Linv
         n_increments = len(self.t)
 
         # Assume at rest - fix later (take last increment form last step when including in BEEF module)       
-        u = Linv @ np.zeros([len(self.part.nodes)*3])
-        udot = Linv @ np.zeros([len(self.part.nodes)*3])
-        self.u = np.ones([len(self.part.nodes)*3, len(self.t)])*np.nan
+        u = Linv @ np.zeros([self.eldef.n_dofs])
+        udot = Linv @ np.zeros([self.eldef.n_dofs])
+        self.u = np.ones([self.eldef.n_dofs, len(self.t)])*np.nan
         self.u[:, 0] = L @ u
         beta, gamma, alpha = self.newmark_factors['beta'], self.newmark_factors['gamma'], self.newmark_factors['alpha']
 
         # Initial system matrices
-        K = L.T @ self.part.k @ L
-        M = L.T @ self.part.m @ L
-        C = L.T @ self.part.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M     
-        
+        K = L.T @ self.eldef.k @ L
+        M = L.T @ self.eldef.m @ L              
+        C = L.T @ self.eldef.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M     
+
         # Get first force vector and estimate initial acceleration
         f = L.T @ self.get_global_forces(0)  #initial force, f0   
-        # prescr_disp, prescr_disp_ix  = self.get_global_prescribed_displacement(0)
-        
-        f_int_prev = L.T @ self.part.q     
+
+        f_int_prev = L.T @ self.eldef.q   
         uddot = newmark.acc_estimate(K, C, M, f, udot, f_int=f_int_prev, beta=beta, gamma=gamma, dt=(self.t[1]-self.t[0]))        
 
         # Initiate progress bar
         if print_progress:
             progress_bar = tqdm(total=n_increments-1, initial=0, desc='Dynamic analysis')        
 
-        # Run through load increments
+        # Run through load INCREMENTS -->
         for k in range(n_increments-1):   
             # Time step load increment  
             dt = self.t[k+1] - self.t[k]
@@ -230,37 +227,27 @@ class AnalysisCR:
 
             # Predictor step Newmark
             u, udot, uddot, du = newmark.pred(u, udot, uddot, dt)
-
-            # Increment displacement iterator object
-            # if len(prescr_disp)>0:   
-            #     prescr_disp, prescr_disp_ix = self.get_global_prescribed_displacement(self.t[k+1])
-            #     u[prescr_disp_ix] = prescr_disp   #overwrite prescribed displacements
-
+            
             # Deform part
-            self.part.deform_part(L @ u)    # deform nodes in part given by u => new f_int and K from elements
+            self.eldef.deform(L @ u)    # deform nodes in part given by u => new f_int and K from elements
             du_inc = u*0
 
             # Calculate internal forces and residual force
-            f_int = L.T @ self.part.q
-            K = L.T @ self.part.k @ L
-            C = L.T @ self.part.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M
+            f_int = L.T @ self.eldef.q
+            K = L.T @ self.eldef.k @ L
+            C = L.T @ self.eldef.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M
             r = newmark.residual_hht(f, f_prev, f_int, f_int_prev, K, C, M, u_prev, udot, udot_prev, uddot, alpha, gamma, beta, dt)
 
-            # Iterations for each load increment 
+            # Run through increment ITERATIONS -->
             for i in range(self.itmax):
                 # Iteration, new displacement (Newton corrector step)
                 u, udot, uddot, du = newmark.corr_alt(r, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=alpha)
-
-                # if len(prescr_disp)>0:   
-                #     u[prescr_disp_ix] = prescr_disp   #overwrite prescribed displacements
-                #     du[prescr_disp_ix] = 0
-
                 du_inc += du
 
                 # Update residual
-                self.part.deform_part(L @ u)    # deform nodes in part given by u => new f_int and K from elements
-                f_int = L.T @ self.part.q       # new internal (stiffness) force 
-                
+                self.eldef.deform(L @ u)    # deform nodes in part given by u => new f_int and K from elements
+                f_int = L.T @ self.eldef.q       # new internal (stiffness) force 
+
                 r = newmark.residual_hht(f, f_prev, f_int, f_int_prev, K, C, M, u_prev, udot, udot_prev, uddot, alpha, gamma, beta, dt)
 
                 # Check convergence
@@ -272,14 +259,14 @@ class AnalysisCR:
                     break
                 
                 # Assemble tangent stiffness, and damping matrices
-                K = L.T @ self.part.k @ L
-                C = L.T @ self.part.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M 
+                K = L.T @ self.eldef.k @ L
+                C = L.T @ self.eldef.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M 
             
                 # Update "previous" step values
                 u_prev = 1.0*u
                 udot_prev = 1.0*udot
                 f_int_prev = 1.0*f_int
-
+            
             self.u[:, k+1] = L @ u    # save to analysis time history
 
             # If all iterations are used
@@ -304,20 +291,22 @@ class AnalysisCR:
 
     def run_lin_dynamic(self, print_progress=True, solver='full_hht', return_results=False):
         # Retrieve constant defintions
-        L = self.part.L
+        L = self.eldef.L
+        Linv = self.Linv
+
         n_increments = len(self.t)
 
         # Assume at rest - fix later (take last increment form last step when including in BEEF module)       
-        u0 = self.part.Linv @ np.zeros([len(self.part.nodes)*3])
-        udot0 = self.part.Linv @ np.zeros([len(self.part.nodes)*3])
+        u0 = Linv @ np.zeros([self.eldef.n_dofs])
+        udot0 = Linv @ np.zeros([self.eldef.n_dofs])
         beta, gamma, alpha = self.newmark_factors['beta'], self.newmark_factors['gamma'], self.newmark_factors['alpha'] 
 
         # System matrices and forces
-        K = L.T @ self.part.k @ L
-        M = L.T @ self.part.m @ L
-        C = L.T @ self.part.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M
-        f = np.zeros([K.shape[0], n_increments])
-        
+        K = L.T @ self.eldef.k @ L
+        M = L.T @ self.eldef.m @ L
+        C = L.T @ self.eldef.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M
+        f = np.zeros([K.shape[0], n_increments])           
+
         for k, tk in enumerate(self.t):    
             f[:, k] = L.T @ self.get_global_forces(tk)        # also enforce compatibility (L.T @ ...), each increment 
 
@@ -325,12 +314,12 @@ class AnalysisCR:
         u, __, __ = newmark.newmark_lin(K, C, M, f, self.t, u0, udot0, beta=beta, gamma=gamma, alpha=alpha, solver=solver)
 
         # Use compatibility relation to assign fixed DOFs as well
-        self.u = np.zeros([self.part.k.shape[0], n_increments])
+        self.u = np.zeros([self.eldef.n_dofs, n_increments])
         for k in range(n_increments):
             self.u[:, k] = L @ u[:, k]
 
         # Deform part as end step
-        self.part.deform_part(self.u[:,-1])
+        self.eldef.deform(self.u[:,-1])
     
         if return_results:
             return self.u
@@ -340,15 +329,15 @@ class AnalysisCR:
         from scipy.linalg import eig as speig
 
         # Retrieve constant defintions
-        L = self.part.L
+        L = self.eldef.L
 
         # Substep 1: Establish geometric stiffness from linear analysis
-        Ke = L.T @ self.part.k @ L
+        Ke = L.T @ self.eldef.k @ L
         f = L.T @ self.get_global_forces(self.t[-1])
         u = solve(Ke, f)
 
-        self.part.deform_part_linear(L @ u)    # deform nodes in part given by u => new f_int and K from elements
-        Kg = L.T @ self.part.get_kg(nonlinear=False) @ L     # get kg from axial forces generated in elements
+        self.eldef.deform_linear(L @ u)    # deform nodes in part given by u => new f_int and K from elements
+        Kg = L.T @ self.eldef.get_kg(nonlinear=False) @ L     # get kg from axial forces generated in elements
 
         # Substep 2: Eigenvalue solution
         lambd_b, phi_b = speig(Ke, b=-Kg)
@@ -362,18 +351,18 @@ class AnalysisCR:
             phi_b = phi_b[:, lambd_b>0]
             lambd_b = lambd_b[lambd_b>0]
 
-        phi_b = np.real(np.vstack([self.part.L @ phi_b[:, ix] for ix in range(0, len(lambd_b))]).T)
+        phi_b = np.real(np.vstack([self.eldef.L @ phi_b[:, ix] for ix in range(0, len(lambd_b))]).T)
 
         return lambd_b, phi_b
         
 
     def run_static(self, print_progress=True, return_results=False):
         # Retrieve constant defintions
-        L = self.part.L
+        L = self.eldef.L
         n_increments = len(self.t)
         
-        u = self.part.Linv @ np.zeros([len(self.part.nodes)*3])
-        self.u = np.ones([len(self.part.nodes)*3, len(self.t), ])*np.nan
+        u = self.Linv @ np.zeros([self.eldef.n_dofs])
+        self.u = np.ones([self.eldef.n_dofs, len(self.t), ])*np.nan
         self.u[:, 0] = L @ u
 
         # Initiate progress bar
@@ -389,12 +378,12 @@ class AnalysisCR:
             df = f - f_prev   # force increment
             
             # Deform part
-            self.part.deform_part(L @ u)    # deform nodes in part given by u => new f_int and K from elements
+            self.eldef.deform(L @ u)    # deform nodes in part given by u => new f_int and K from elements
             du_inc = u*0        # total displacement during increment
 
             # Calculate internal forces and residual force
-            f_int = L.T @ self.part.q
-            K = L.T @ self.part.k @ L
+            f_int = L.T @ self.eldef.q
+            K = L.T @ self.eldef.k @ L
             r = f - f_int       # residual force
 
             # Iterations for each load increment 
@@ -405,8 +394,8 @@ class AnalysisCR:
                 du_inc = du_inc + du
 
                 # Update residual
-                self.part.deform_part(L @ u)    # deform nodes in part given by u => new f_int and K from elements
-                f_int = L.T @ self.part.q       # new internal (stiffness) force
+                self.eldef.deform(L @ u)    # deform nodes in part given by u => new f_int and K from elements
+                f_int = L.T @ self.eldef.q       # new internal (stiffness) force
                 r = f - f_int                   # residual force
 
                 # Check convergence
@@ -416,7 +405,7 @@ class AnalysisCR:
                     break
 
                 # Assemble tangent stiffness if a new iteration is needed
-                K = L.T @ self.part.k @ L
+                K = L.T @ self.eldef.k @ L
 
             self.u[:, k] = L @ u    # save to analysis time history
 
@@ -439,16 +428,16 @@ class AnalysisCR:
 
     def run_lin_static(self, print_progress=True, return_results=False):
         # Retrieve constant defintions
-        L = self.part.L
+        L = self.eldef.L
         n_increments = len(self.t)
         
-        self.u = np.ones([len(self.part.nodes)*3, len(self.t)])*np.nan
+        self.u = np.ones([self.eldef.n_dofs, len(self.t)])*np.nan
 
         # Initiate progress bar
         if print_progress:
             progress_bar = tqdm(total=(n_increments), initial=0, desc='Static analysis')  
         
-        K = L.T @ self.part.k @ L
+        K = L.T @ self.eldef.k @ L
 
         for k, tk in enumerate(self.t): 
             f = L.T @ self.get_global_forces(tk)     # force in increment k
@@ -457,7 +446,7 @@ class AnalysisCR:
             if print_progress:
                 progress_bar.update(1)  # iterate on progress bar (adding 1)    
         
-        self.part.deform_part_linear(self.u[:,-1])    # deform nodes in part given by u => new f_int and K from elements
+        self.eldef.deform_linear(self.u[:,-1])    # deform nodes in part given by u => new f_int and K from elements
         
         if print_progress:    
             progress_bar.close()
