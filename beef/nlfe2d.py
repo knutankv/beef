@@ -1,6 +1,5 @@
 from scipy.linalg import block_diag, null_space as null, solve
 import numpy as np
-from knutils.tools import print_progress as pprogress, clear_progress
 from beef import newmark
 from beef.newmark import is_converged, factors_from_alpha
 from beef import gdof_from_nodedof, compatibility_matrix, B_to_dofpairs, dof_pairs_to_Linv, lagrange_constrain, convert_dofs, convert_dofs_list, ensure_list, gdof_ix_from_nodelabels, basic_coupled, blkdiag
