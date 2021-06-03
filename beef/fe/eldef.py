@@ -8,7 +8,7 @@ from ..general import ensure_list, compatibility_matrix as compmat, lagrange_con
 from copy import deepcopy as copy
 
 class ElDef:
-    def __init__(self, nodes, elements, constraints=None, constraint_type='lagrange', domain='3d'):
+    def __init__(self, nodes, elements, constraints=None, constraint_type='lagrange', domain='3d', features=None):
         self.nodes = nodes
         self.elements = elements
         self.assign_node_dofcounts()
@@ -33,7 +33,42 @@ class ElDef:
             self.L = null(self.B)
         else:
             self.B = None
-            self.L = None       
+            self.L = None   
+
+        self.constrained_dofs = self.dof_pairs[self.dof_pairs[:,1]==None, 0]
+        # self.unconstrained_dofs = np.delete(np.arange(0, np.shape(self.B)[1]), self.constrained_dofs)
+      
+        if features is None:
+            features = []
+
+        self.features = features
+        self.feature_mats = self.global_matrices_from_features()
+
+        # Update global matrices and vectors
+        self.assign_node_dofcounts()
+        self.assign_global_dofs()
+
+        self.update_tangent_stiffness()
+        self.update_internal_forces()
+        self.update_mass_matrix()
+        self.c = self.feature_mats['c']
+
+
+    def global_matrices_from_features(self):
+        n_dofs = np.shape(self.B)[1]
+        feature_mats = dict(k=np.zeros([n_dofs, n_dofs]), 
+                            c=np.zeros([n_dofs, n_dofs]), 
+                            m=np.zeros([n_dofs, n_dofs]))
+
+        for feature in self.features:
+            ixs = np.array([self.node_dof_lookup(node_label, dof_ix) for node_label, dof_ix in zip(feature.node_labels, feature.dof_ixs)])      
+            feature_mats[feature.type][np.ix_(ixs, ixs)] = feature.matrix
+
+        return feature_mats
+
+    def node_dof_lookup(self, node_label, dof_ix):
+        return self.nodes[np.where(self.get_node_labels() == node_label)[0][0]].global_dof_ixs[dof_ix]
+    
 
     # CORE METHODS
     def __str__(self):
@@ -67,7 +102,7 @@ class ElDef:
     def assign_global_dofs(self):
         for node in self.nodes:
             node.global_dofs = self.node_label_to_dof_ix(node.label)
-
+        
     def assign_node_dofcounts(self):
         for node in self.nodes:
             els = self.elements_with_node(node.label, return_node_ix=False)
@@ -175,6 +210,41 @@ class ElDef:
         for element in self.elements:
             element.update_geometry()
 
+    def update_internal_forces(self, u=None):       # on part level
+        node_labels = self.get_node_labels()
+        ndim = len(node_labels)*3           #needs adjustment to account for 3d
+        if u is None:
+            u = np.zeros([ndim])
+
+        if hasattr(self, 'feature_mats'):
+            self.q = self.feature_mats['k'] @ u   
+        else:
+            self.q = u*0
+
+        for el_ix, el in enumerate(self.elements):
+            node_ix1 = np.where(node_labels == el.nodes[0].label)[0][0]
+            node_ix2 = np.where(node_labels == el.nodes[1].label)[0][0]
+            ixs = np.hstack([node_ix1*3+np.arange(0,3), node_ix2*3+np.arange(0,3)])
+
+            self.q[ixs] += el.q
+
+    def update_tangent_stiffness(self):
+        node_labels = self.get_node_labels()
+        ndim = len(node_labels)*3                #needs adjustment to account for 3d
+        self.k = self.feature_mats['k']*1          
+        
+        for el in self.elements:
+            self.k[np.ix_(el.global_dofs, el.global_dofs)] += el.k
+
+    
+    def update_mass_matrix(self):
+        node_labels = self.get_node_labels()
+        ndim = len(node_labels)*3            #needs adjustment to account for 3d
+        self.m = self.feature_mats['m']*1   
+
+        for el in self.elements:
+            self.m[np.ix_(el.global_dofs, el.global_dofs)] += el.m
+            
 
     # GET METHODS
     def get_sections(self):

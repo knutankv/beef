@@ -83,6 +83,9 @@ class BeamElement:
     def get_nodelabels(self):
         return [node.label for node in self.nodes]
 
+    @property
+    def global_dofs(self):
+        return np.hstack([node.global_dofs for node in self.nodes])
 
 class BeamElement2d(BeamElement):
     def __init__(self, nodes, label, section=Section(), shear_flexible=False, mass_formulation='timoshenko', nonlinear=True, N0=0):
@@ -125,16 +128,17 @@ class BeamElement2d(BeamElement):
         self.L0 = self.get_length()
         self.phi0 = self.get_element_angle()
         self.update_geometry()
+        self.update_m()
         self.update()        
 
     # ------------- INITIALIZATION ----------------------
     def initiate_nodes(self):
         for node in self.nodes:
             node.ndofs = self.dofs_per_node 
-            node.x0 = np.zeros(6)
+            node.x0 = np.zeros(3)
             node.x0[:2] = node.coordinates
             node.x = node.x0*1
-            node.u = np.zeros(6)
+            node.u = np.zeros(3)
 
     # ------------- GEOMETRY -----------------------------
     def get_e2(self):
