@@ -8,7 +8,7 @@ from ..general import ensure_list, compatibility_matrix as compmat, lagrange_con
 from copy import deepcopy as copy
 
 class ElDef:
-    def __init__(self, nodes, elements, constraints=None, constraint_type='lagrange', domain='3d', features=None):
+    def __init__(self, nodes, elements, constraints=None, constraint_type='none', domain='3d', features=None, assemble=True):
         self.nodes = nodes
         self.elements = elements
         self.assign_node_dofcounts()
@@ -53,6 +53,9 @@ class ElDef:
         self.update_mass_matrix()
         self.c = self.feature_mats['c']
 
+        if assemble:
+            self.assemble()
+
     @property
     def n_dofs(self):
         return np.sum([node.ndofs for node in self.nodes])
@@ -87,10 +90,13 @@ class ElDef:
         return plot_elements(self.elements, **kwargs)      
     
     # ASSIGNMENT AND PREPARATION METHODS
-    def assemble(self):
+    def assemble(self, constraint_type=None):
+        if constraint_type is None:
+            constraint_type = self.constraint_type
+
         self.assign_node_dofcounts() # ? 
         self.assign_global_dofs()
-        self.m, self.c, self.k, self.kg = self.global_element_matrices(constraint_type=self.constraint_type)
+        self.m, self.c, self.k, self.kg = self.global_element_matrices(constraint_type=constraint_type)
 
     def discard_unused_elements(self): #only elements connected to two nodes are kept
         discard_ix = []
