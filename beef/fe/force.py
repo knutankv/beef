@@ -3,13 +3,15 @@ import numpy as np
 
 #%% Load class definition 
 class Force:
-    def __init__(self, node_labels, dofs, amplitudes, name='Force-0', plotcolor='DarkOrange'):
+    def __init__(self, node_labels, dofs, amplitudes, name='Force-0', plotcolor='DarkOrange', t=None):
         self.plotcolor = plotcolor
         self.name = name
-        self.dof_ix = self.adjust_dof_ix(dof_ix, len(node_labels))
+        self.dof_ix = self.adjust_dof_ix(dofs, len(node_labels))
         amplitudes = self.adjust_amplitudes(amplitudes, len(node_labels))
+
         self.min_dt = np.inf
-        self.type = force_type
+        self.t = t
+        self.node_labels = node_labels
 
         if t is None:
                 self.evaluate = lambda __: amplitudes[:, 0]  # output constant force regardless

@@ -2,6 +2,7 @@ import functools
 import numpy as np
 
 @functools.total_ordering
+
 class Node:
     def __init__(self, label, coordinates, ndofs=None, global_dofs=None):
         self.label = int(label)
@@ -14,6 +15,7 @@ class Node:
         self.x = None
         self.rots = None
         self.u = None 
+        self.dim = len(coordinates[1:])
 
     # CORE METHODS
     def __eq__(self, other):

@@ -3,9 +3,9 @@ from ..general import convert_dofs_list
 
 #%% Constraint class definition
 class Constraint:
-    def __init__(self, master_nodes, slave_nodes=None, name='constraint-0', dofs='all', relative_to='global'):
+    def __init__(self, master_nodes, slave_nodes=None, name='constraint-0', dofs='all', node_type='beam3d', relative_to='global'):
         self.name = name       
-        dofs = convert_dofs_list(dofs, len(master_nodes))
+        dofs = convert_dofs_list(dofs, len(master_nodes), node_type=node_type)
 
         if slave_nodes is None:
             self.type = 'node-to-ground'

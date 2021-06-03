@@ -1,6 +1,5 @@
 import numpy as np
 import vispy
-vispy.use('PyQt5')
 from vispy import visuals, scene
 from copy import deepcopy
 

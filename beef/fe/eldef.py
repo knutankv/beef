@@ -4,16 +4,17 @@ from .node import *
 from .element import *
 from .section import *
 from scipy.linalg import null_space as null
-from ..general import ensure_list
+from ..general import ensure_list, compatibility_matrix as compmat, lagrange_constrain, gdof_ix_from_nodelabels
 from copy import deepcopy as copy
 
 class ElDef:
-    def __init__(self, nodes, elements, constraints=None, constraint_type='lagrange', domain='3d'):
+    def __init__(self, nodes, elements, constraints=None, constraint_type='lagrange', domain='3d', features=None):
         self.nodes = nodes
         self.elements = elements
         self.assign_node_dofcounts()
         self.k, self.m, self.c, self.kg = None, None, None, None
         self.domain = domain
+        self.dim = 2 if domain=='2d' else 3
 
         if set([el.domain for el in self.elements]) != set([domain]):
             raise ValueError('Element domains has to match ElDef/Part/Assembly.')
@@ -21,6 +22,8 @@ class ElDef:
         # Constraints
         self.constraints = constraints 
         self.constraint_type = constraint_type
+        self.dof_pairs = self.constraint_dof_ix()               #PATCH for compatibility with nlfe2d module
+        self.gdof_ix_from_nodelabels = lambda node_labels, dof_ix: gdof_ix_from_nodelabels(self.get_node_labels(), node_labels, dof_ix=dof_ix)  #PATCH for compatibility with nlfe2d module
         
         if len(set(self.get_node_labels()))!=len(self.get_node_labels()):
             raise ValueError('Non-unique node labels defined.')
@@ -30,7 +33,42 @@ class ElDef:
             self.L = null(self.B)
         else:
             self.B = None
-            self.L = None       
+            self.L = None   
+
+        self.constrained_dofs = self.dof_pairs[self.dof_pairs[:,1]==None, 0]
+        # self.unconstrained_dofs = np.delete(np.arange(0, np.shape(self.B)[1]), self.constrained_dofs)
+      
+        if features is None:
+            features = []
+
+        self.features = features
+        self.feature_mats = self.global_matrices_from_features()
+
+        # Update global matrices and vectors
+        self.assign_node_dofcounts()
+        self.assign_global_dofs()
+
+        self.update_tangent_stiffness()
+        self.update_internal_forces()
+        self.update_mass_matrix()
+        self.c = self.feature_mats['c']
+
+
+    def global_matrices_from_features(self):
+        n_dofs = np.shape(self.B)[1]
+        feature_mats = dict(k=np.zeros([n_dofs, n_dofs]), 
+                            c=np.zeros([n_dofs, n_dofs]), 
+                            m=np.zeros([n_dofs, n_dofs]))
+
+        for feature in self.features:
+            ixs = np.array([self.node_dof_lookup(node_label, dof_ix) for node_label, dof_ix in zip(feature.node_labels, feature.dof_ixs)])      
+            feature_mats[feature.type][np.ix_(ixs, ixs)] = feature.matrix
+
+        return feature_mats
+
+    def node_dof_lookup(self, node_label, dof_ix):
+        return self.nodes[np.where(self.get_node_labels() == node_label)[0][0]].global_dof_ixs[dof_ix]
+    
 
     # CORE METHODS
     def __str__(self):
@@ -64,7 +102,7 @@ class ElDef:
     def assign_global_dofs(self):
         for node in self.nodes:
             node.global_dofs = self.node_label_to_dof_ix(node.label)
-
+        
     def assign_node_dofcounts(self):
         for node in self.nodes:
             els = self.elements_with_node(node.label, return_node_ix=False)
@@ -172,6 +210,41 @@ class ElDef:
         for element in self.elements:
             element.update_geometry()
 
+    def update_internal_forces(self, u=None):       # on part level
+        node_labels = self.get_node_labels()
+        ndim = len(node_labels)*3           #needs adjustment to account for 3d
+        if u is None:
+            u = np.zeros([ndim])
+
+        if hasattr(self, 'feature_mats'):
+            self.q = self.feature_mats['k'] @ u   
+        else:
+            self.q = u*0
+
+        for el_ix, el in enumerate(self.elements):
+            node_ix1 = np.where(node_labels == el.nodes[0].label)[0][0]
+            node_ix2 = np.where(node_labels == el.nodes[1].label)[0][0]
+            ixs = np.hstack([node_ix1*3+np.arange(0,3), node_ix2*3+np.arange(0,3)])
+
+            self.q[ixs] += el.q
+
+    def update_tangent_stiffness(self):
+        node_labels = self.get_node_labels()
+        ndim = len(node_labels)*3                #needs adjustment to account for 3d
+        self.k = self.feature_mats['k']*1          
+        
+        for el in self.elements:
+            self.k[np.ix_(el.global_dofs, el.global_dofs)] += el.k
+
+    
+    def update_mass_matrix(self):
+        node_labels = self.get_node_labels()
+        ndim = len(node_labels)*3            #needs adjustment to account for 3d
+        self.m = self.feature_mats['m']*1   
+
+        for el in self.elements:
+            self.m[np.ix_(el.global_dofs, el.global_dofs)] += el.m
+            
 
     # GET METHODS
     def get_sections(self):
@@ -189,7 +262,7 @@ class ElDef:
     # CONSTRAINT METHODS   
     def constraint_dof_ix(self):        
         if self.constraints is None:
-            raise ValueError("Can't output constraint DOF indices as no constraints are given.")
+            return None
 
         c_dof_ix = []
         
@@ -234,7 +307,7 @@ class ElDef:
     def compatibility_matrix(self):
         dof_pairs = self.constraint_dof_ix()
         ndim = np.sum(self.ndofs)
-        compat_mat = compatibility_matrix(dof_pairs, ndim)
+        compat_mat = compmat(dof_pairs, ndim)
         
         return compat_mat   
     
@@ -274,7 +347,7 @@ class ElDef:
 
     # GENERATE OUTPUT FOR ANALYSIS    
     def global_element_matrices(self, constraint_type=None):
-        ndim = len(self.nodes)*6
+        ndim = len(self.all_dof_ixs())
         
         mass = np.zeros([ndim, ndim])
         stiffness = np.zeros([ndim, ndim])
@@ -288,7 +361,7 @@ class ElDef:
             dof_ix1, dof_ix2 = el.nodes[0].global_dofs, el.nodes[1].global_dofs
             dof_range = np.r_[dof_ix1, dof_ix2]
             T = el.tmat
-            
+
             mass[np.ix_(dof_range, dof_range)] += el.get_m()
             stiffness[np.ix_(dof_range, dof_range)] += el.get_k()
             geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg()
@@ -417,7 +490,8 @@ def create_nodes(node_matrix):
 def create_nodes_and_elements(node_matrix, element_matrix, sections=None, left_handed_csys=False, element_types=None):
     nodes = create_nodes(node_matrix)
     node_labels = np.array([node.label for node in nodes])
-    
+    dim = node_matrix.shape[1]-1
+
     n_els = element_matrix.shape[0]
     elements = [None]*n_els
     
@@ -436,9 +510,13 @@ def create_nodes_and_elements(node_matrix, element_matrix, sections=None, left_h
         ix2 = np.where(node_labels==el_node_label[1])[0][0]
 
         if element_types[el_ix] == 'beam':
-            elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
+            if dim==3:
+                elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
+            else:
+                elements[el_ix] = BeamElement2d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix])
+
         elif element_types[el_ix] == 'bar':
-            # Currently only added to enable extraction of Kg for bars - not supported fully (assumed as beams otherwise)
+            # Currently only added to enable extraction of Kg for bars - not supported otherwise (assumed as beams otherwise)
             elements[el_ix] = BarElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
         
     return nodes, elements

@@ -65,7 +65,7 @@ def gdof_ix_from_nodelabels(all_node_labels, node_labels, dof_ix=[0,1,2]):     #
     
     if type(node_labels) is not list:
         node_labels = [node_labels]
-        
+    
     node_ix = [np.where(nl==all_node_labels)[0] for nl in node_labels]
     gdof_ix = gdof_from_nodedof(node_ix, dof_ix)
     
@@ -83,7 +83,7 @@ def gdof_from_nodedof(node_ix, dof_ixs, n_dofs=3, merge=True):
         
     elif len(dof_ixs) != len(node_ix):
         dof_ixs = [dof_ixs]*len(node_ix)
-    
+
     for ix, n in enumerate(node_ix):
         gdof_ix.append(n*n_dofs + np.array(dof_ixs[ix]))
     

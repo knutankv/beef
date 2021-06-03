@@ -4,7 +4,7 @@ from knutils.tools import print_progress as pprogress, clear_progress
 from beef import newmark
 from beef.newmark import is_converged, factors_from_alpha
 from beef import gdof_from_nodedof, compatibility_matrix, B_to_dofpairs, dof_pairs_to_Linv, lagrange_constrain, convert_dofs, convert_dofs_list, ensure_list, gdof_ix_from_nodelabels, basic_coupled, blkdiag
-
+from copy import deepcopy as copy
         
 class Analysis:
     def __init__(self, part, forces=None, prescribed_displacements=None, tmax=1, dt=1, itmax=10, t0=0, tol=None, nr_modified=False, newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, outputs=['u'], tol_fun=np.linalg.norm):
