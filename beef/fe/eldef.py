@@ -207,7 +207,7 @@ class ElDef:
         return dof_ix
 
     # MODIFIERS
-    def deform(self, u):
+    def deform(self, u, update_tangents=True):
         for node in self.nodes:
             node.u = u[node.global_dofs]
             node.x = node.x0 + node.u
@@ -216,7 +216,9 @@ class ElDef:
             element.update_geometry()
             element.update()
 
-        self.update_tangent_stiffness()
+        if update_tangents:
+            self.update_tangent_stiffness()
+
         self.update_internal_forces()
 
     def deform_linear(self, u):

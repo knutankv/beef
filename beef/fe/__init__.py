@@ -17,6 +17,7 @@ from .force import *
 from .step import *
 
 from .analysis import *
+from .results import *
 
 import sys
 if any('jupyter' in arg for arg in sys.argv):
