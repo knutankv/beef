@@ -3,7 +3,7 @@ import numpy as np
 #%% Section class method
 class Section:
 
-    def __init__(self, E=0, rho=0, A=0, I_y=0, I_z=None, 
+    def __init__(self, E=0, rho=0, A=np.inf, I_y=0, I_z=None, 
                  poisson=0.3, m=None, G=None, kappa=1, J=0,
                  e2=None, shear_deformation=False, mass_formulation='euler', name=None):
 
@@ -23,7 +23,7 @@ class Section:
         # Cross-section
         self.A = A
         if I_z == None:
-            I_z = []
+            I_z = np.nan
         
         self.I = np.hstack([I_y, I_z])
         self.J = J

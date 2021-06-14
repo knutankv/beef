@@ -435,7 +435,10 @@ class BeamElement3d(BeamElement):
         J = self.section.J       
         k_axial = E*A/L
 
-        mu_y, mu_z, phi_y, phi_z = self.get_psi(return_phi=True)
+        mu, phi = self.get_psi(return_phi=True)
+        
+        mu_y, mu_z = mu 
+        phi_y, phi_z = phi
         
         ke = np.array([
             [k_axial, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -459,7 +462,10 @@ class BeamElement3d(BeamElement):
         I_z = self.section.I[1]
         I_y = self.section.I[0]
 
-        mu_y, mu_z, phi_y, phi_z = self.get_psi(return_phi=True)
+        mu, phi = self.get_psi(return_phi=True)
+        
+        mu_y, mu_z = mu 
+        phi_y, phi_z = phi
 
         m = self.section.m
         L = self.L
@@ -487,10 +493,13 @@ class BeamElement3d(BeamElement):
         
     def local_m_consistent(self):
         # https://link.springer.com/content/pdf/10.1007%2F978-1-84996-190-5_1.pdf    
-
         I_y, I_z = self.section.I
-        mu_y, mu_z, phi_y, phi_z = self.get_psi(return_phi=True)
 
+        mu, phi = self.get_psi(return_phi=True)
+        
+        mu_y, mu_z = mu 
+        phi_y, phi_z = phi
+        
         m = self.section.m
         L = self.L
         

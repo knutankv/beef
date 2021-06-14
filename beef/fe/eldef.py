@@ -34,8 +34,10 @@ class ElDef:
         else:
             self.B = None
             self.L = None   
-
-        self.constrained_dofs = self.dof_pairs[self.dof_pairs[:,1]==None, 0]
+        if self.dof_pairs is not None:
+            self.constrained_dofs = self.dof_pairs[self.dof_pairs[:,1]==None, 0]
+        else: 
+            self.constrained_dofs = []
         # self.unconstrained_dofs = np.delete(np.arange(0, np.shape(self.B)[1]), self.constrained_dofs)
       
         if features is None:
@@ -43,18 +45,18 @@ class ElDef:
 
         self.features = features
         self.feature_mats = self.global_matrices_from_features()
-
+            
         # Update global matrices and vectors
         self.assign_node_dofcounts()
         self.assign_global_dofs()
 
-        self.update_tangent_stiffness()
-        self.update_internal_forces()
-        self.update_mass_matrix()
         self.c = self.feature_mats['c']
 
         if assemble:
             self.assemble()
+            self.update_tangent_stiffness()
+            self.update_internal_forces()
+            self.update_mass_matrix()
 
     @property
     def n_dofs(self):
@@ -62,7 +64,7 @@ class ElDef:
 
 
     def global_matrices_from_features(self):
-        n_dofs = np.shape(self.B)[1]
+        n_dofs = self.n_dofs
         feature_mats = dict(k=np.zeros([n_dofs, n_dofs]), 
                             c=np.zeros([n_dofs, n_dofs]), 
                             m=np.zeros([n_dofs, n_dofs]))
