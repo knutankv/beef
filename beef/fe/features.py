@@ -20,19 +20,19 @@ class Feature:
 
     # CORE METHODS
     def __str__(self):
-        return f'BEEF Feature {self.name}'
+        return f'BEEF Feature: {self.name}'
 
     def __repr__(self):
-        return f'BEEF Feature {self.name}'
+        return f'BEEF Feature: {self.name}'
 
 class Spring(Feature):
-    def __init__(self, node_labels, dof_ixs, k):
-        super().__init__('k', node_labels, dof_ixs, k)
+    def __init__(self, node_labels, dof_ixs, k, **kwargs):
+        super().__init__('k', node_labels, dof_ixs, k, **kwargs)
         
 class Dashpot(Feature):
-    def __init__(self, node_labels, dof_ixs, c):
-        super().__init__('c', node_labels, dof_ixs, c)
+    def __init__(self, node_labels, dof_ixs, c, **kwargs):
+        super().__init__('c', node_labels, dof_ixs, c, **kwargs)
         
 class PointMass(Feature):
-    def __init__(self, node_label, dof_ixs, m):
-        super().__init__('m', node_label, dof_ixs, m)
+    def __init__(self, node_label, dof_ixs, m, **kwargs):
+        super().__init__('m', node_label, dof_ixs, m, **kwargs)

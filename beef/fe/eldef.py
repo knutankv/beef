@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import numpy as np
 from .node import *
 from .element import *
@@ -43,13 +42,14 @@ class ElDef:
         if features is None:
             features = []
 
-        self.features = features
-        self.feature_mats = self.global_matrices_from_features()
-            
         # Update global matrices and vectors
         self.assign_node_dofcounts()
         self.assign_global_dofs()
 
+        # Establish features
+        self.features = features
+        self.feature_mats = self.global_matrices_from_features()
+            
         self.c = self.feature_mats['c']
 
         if assemble:
@@ -59,24 +59,24 @@ class ElDef:
             self.update_mass_matrix()
 
     @property
-    def n_dofs(self):
+    def ndofs(self):
         return np.sum([node.ndofs for node in self.nodes])
 
 
     def global_matrices_from_features(self):
-        n_dofs = self.n_dofs
+        n_dofs = self.ndofs
         feature_mats = dict(k=np.zeros([n_dofs, n_dofs]), 
                             c=np.zeros([n_dofs, n_dofs]), 
                             m=np.zeros([n_dofs, n_dofs]))
 
         for feature in self.features:
-            ixs = np.array([self.node_dof_lookup(node_label, dof_ix) for node_label, dof_ix in zip(feature.node_labels, feature.dof_ixs)])      
+            ixs = np.array([self.node_dof_lookup(node_label, dof_ix=dof_ix) for node_label, dof_ix in zip(feature.node_labels, feature.dof_ixs)])      
             feature_mats[feature.type][np.ix_(ixs, ixs)] = feature.matrix
 
         return feature_mats
 
-    def node_dof_lookup(self, node_label, dof_ix):
-        return self.nodes[np.where(self.get_node_labels() == node_label)[0][0]].global_dof_ixs[dof_ix]
+    def node_dof_lookup(self, node_label, dof_ix=slice(None)):
+        return self.get_node(node_label).global_dofs[dof_ix]
     
 
     # CORE METHODS
@@ -123,11 +123,11 @@ class ElDef:
             else:
                 node.ndofs = 0
             
-        self.ndofs = self.all_ndofs()
+        self.all_ndofs = self.get_all_ndofs()
         
     
     # NODE/DOF LOOKUP AND BOOKKEEPING METHODS      
-    def all_ndofs(self):
+    def get_all_ndofs(self):
         return np.array([node.ndofs for node in self.nodes])
     
     def in_part(self, nodelabels):
@@ -204,8 +204,8 @@ class ElDef:
     
     def node_label_to_dof_ix(self, node_label): 
         node_ix = self.node_label_to_node_ix(node_label)   
-        lower_dofs = sum(self.ndofs[:node_ix])
-        dof_ix = lower_dofs + np.arange(0, self.ndofs[node_ix])
+        lower_dofs = sum(self.all_ndofs[:node_ix])
+        dof_ix = lower_dofs + np.arange(0, self.all_ndofs[node_ix])
         return dof_ix
 
     # MODIFIERS
@@ -240,7 +240,7 @@ class ElDef:
 
     def update_internal_forces(self, u=None):       # on part level
         if u is None:
-            u = np.zeros([self.n_dofs])
+            u = np.zeros([self.ndofs])
 
         if hasattr(self, 'feature_mats'):
             self.q = self.feature_mats['k'] @ u   
@@ -313,8 +313,7 @@ class ElDef:
     
     def compatibility_matrix(self):
         dof_pairs = self.constraint_dof_ix()
-        ndim = np.sum(self.ndofs)
-        compat_mat = compmat(dof_pairs, ndim)
+        compat_mat = compmat(dof_pairs, self.ndofs)
         
         return compat_mat   
     
@@ -332,8 +331,7 @@ class ElDef:
         return t_mat
 
     def get_kg(self, N=None):
-        ndim = len(self.get_node_labels())*6
-        kg_eldef = np.zeros([ndim, ndim])
+        kg_eldef = np.zeros([self.ndofs, self.ndofs])
         
         for el in self.elements:
             if el.nodes[1].global_dofs is None:
@@ -341,7 +339,7 @@ class ElDef:
                 print(el.nodes[1])
                 
             glob_dofs = np.r_[el.nodes[0].global_dofs, el.nodes[1].global_dofs].astype(int)
-            local_dofs = np.r_[0:len(el.nodes[0].global_dofs), 6:6+len(el.nodes[1].global_dofs)]    #added for cases where one node in element is not present in self.nodes, check speed effect later
+            local_dofs = np.r_[0:el.nodes[0].ndofs, (el.nodes[0].ndofs):(el.nodes[0].ndofs + el.nodes[1].ndofs )]    #added for cases where one node in element is not present in self.nodes, check speed effect later
 
             kg_eldef[np.ix_(glob_dofs, glob_dofs)] += el.get_kg(N=N)[np.ix_(local_dofs, local_dofs)]
             

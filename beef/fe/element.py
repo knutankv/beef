@@ -22,6 +22,7 @@ class BeamElement:
     def __str__(self):
         return f'Element {self.label}'
 
+
     # ------------- GEOMETRY AND PROPERTIES ---------------------------
     def get_cog(self):
         return (self.nodes[0].coordinates + self.nodes[1].coordinates)/2
@@ -57,7 +58,7 @@ class BeamElement:
         else:
             return psi
     # ------------- ELEMENT MATRIX -----------------------
-    def get_kg(self, N=None):  # element level function (global DOFs)
+    def get_kg(self, N=None):  # element level function (global DOFs) 
         return self.tmat.T @ self.get_local_kg(N=N) @ self.tmat
 
     def get_m(self):
@@ -92,6 +93,9 @@ class BeamElement:
     def u(self):
         return np.hstack([node.u for node in self.nodes])
         
+    @property
+    def ndofs(self):
+        return self.nodes[0].ndofs + self.nodes[1].ndofs
 
 class BeamElement2d(BeamElement):
     def __init__(self, nodes, label, section=Section(), shear_flexible=False, mass_formulation='timoshenko', nonlinear=True, N0=0):
@@ -264,7 +268,10 @@ class BeamElement2d(BeamElement):
         
         return m
 
-    def get_local_kg(self, N):
+    def get_local_kg(self, N=None):
+        if N is None:
+            N = self.N
+            
         L = self.L0
         return np.array([
                     [0, 0, 0, 0, 0, 0],
@@ -339,15 +346,9 @@ class BeamElement2d(BeamElement):
         elif load_effect == 'N':
             return self.N
 
-    # --------------- POST PROCESSING ------------------------------
-    def get_kg(self, N=None, nonlinear=True):  # element level function (global DOFs)
-        if N is None:
-            N = self.N
-
-        if nonlinear:
-            return self.tmat.T @ self.get_S() @ self.get_Kd_g() @ self.get_S().T @ self.tmat #from corotated formulation
-        else:
-            return self.tmat.T @ self.get_local_kg(N) @ self.tmat
+    # --------------- MISC ------------------------------
+    def get_kg_nonlinear(self):  # element level function (global DOFs)
+        return self.tmat.T @ self.get_S() @ self.get_Kd_g() @ self.get_S().T @ self.tmat #from corotated formulation
 
 class BeamElement3d(BeamElement):
     def __init__(self, nodes, label=None, section=Section(), mass_formulation='consistent', shear_flexible=False, nonlinear=False, e2=None, N0=0, left_handed_csys=False):

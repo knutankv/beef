@@ -156,7 +156,7 @@ class AnalysisCR:
         
 
     def get_global_forces(self, t):  
-        glob_force = np.zeros(self.eldef.n_dofs)
+        glob_force = np.zeros(self.eldef.ndofs)
         for force in self.forces:
             dof_ix = np.hstack([self.eldef.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(force.node_labels, force.dof_ix)]).flatten()
             glob_force[dof_ix] += force.evaluate(t)
@@ -164,7 +164,7 @@ class AnalysisCR:
         return glob_force
 
     def get_global_prescribed_displacement(self, t):  
-        glob_displacement = np.zeros(self.eldef.n_dofs)
+        glob_displacement = np.zeros(self.eldef.ndofs)
         dof_ix_full = []
         for pd in self.prescr_disp:
             dof_ix_add = np.hstack([self.eldef.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(pd.node_labels, pd.dof_ix)]).flatten()
@@ -190,9 +190,9 @@ class AnalysisCR:
         n_increments = len(self.t)
 
         # Assume at rest - fix later (take last increment form last step when including in BEEF module)       
-        u = Linv @ np.zeros([self.eldef.n_dofs])
-        udot = Linv @ np.zeros([self.eldef.n_dofs])
-        self.u = np.ones([self.eldef.n_dofs, len(self.t)])*np.nan
+        u = Linv @ np.zeros([self.eldef.ndofs])
+        udot = Linv @ np.zeros([self.eldef.ndofs])
+        self.u = np.ones([self.eldef.ndofs, len(self.t)])*np.nan
         self.u[:, 0] = L @ u
         beta, gamma, alpha = self.newmark_factors['beta'], self.newmark_factors['gamma'], self.newmark_factors['alpha']
 
@@ -297,8 +297,8 @@ class AnalysisCR:
         n_increments = len(self.t)
 
         # Assume at rest - fix later (take last increment form last step when including in BEEF module)       
-        u0 = Linv @ np.zeros([self.eldef.n_dofs])
-        udot0 = Linv @ np.zeros([self.eldef.n_dofs])
+        u0 = Linv @ np.zeros([self.eldef.ndofs])
+        udot0 = Linv @ np.zeros([self.eldef.ndofs])
         beta, gamma, alpha = self.newmark_factors['beta'], self.newmark_factors['gamma'], self.newmark_factors['alpha'] 
 
         # System matrices and forces
@@ -314,7 +314,7 @@ class AnalysisCR:
         u, __, __ = newmark.newmark_lin(K, C, M, f, self.t, u0, udot0, beta=beta, gamma=gamma, alpha=alpha, solver=solver)
 
         # Use compatibility relation to assign fixed DOFs as well
-        self.u = np.zeros([self.eldef.n_dofs, n_increments])
+        self.u = np.zeros([self.eldef.ndofs, n_increments])
         for k in range(n_increments):
             self.u[:, k] = L @ u[:, k]
 
@@ -361,8 +361,8 @@ class AnalysisCR:
         L = self.eldef.L
         n_increments = len(self.t)
         
-        u = self.Linv @ np.zeros([self.eldef.n_dofs])
-        self.u = np.ones([self.eldef.n_dofs, len(self.t), ])*np.nan
+        u = self.Linv @ np.zeros([self.eldef.ndofs])
+        self.u = np.ones([self.eldef.ndofs, len(self.t), ])*np.nan
         self.u[:, 0] = L @ u
 
         # Initiate progress bar
@@ -431,7 +431,7 @@ class AnalysisCR:
         L = self.eldef.L
         n_increments = len(self.t)
         
-        self.u = np.ones([self.eldef.n_dofs, len(self.t)])*np.nan
+        self.u = np.ones([self.eldef.ndofs, len(self.t)])*np.nan
 
         # Initiate progress bar
         if print_progress:
