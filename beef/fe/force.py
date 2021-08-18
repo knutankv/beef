@@ -24,7 +24,7 @@ class Force:
                 self.min_dt = np.min(np.diff(t))
 
             if amplitudes.shape != tuple([len(node_labels), len(t)]):
-                raise ValueError('Please fix form of amplitude input.')
+                raise ValueError('Please fix form of amplitude input. It should be either n_nodelabels x n_samples or n_samples x 1 in dimensions.')
 
             self.evaluate = interp1d(t, amplitudes, fill_value=amplitudes[:, 0]*0, bounds_error=False)
             self.amplitudes = amplitudes
@@ -61,17 +61,3 @@ class Force:
             amplitudes = np.repeat(amplitudes, n_nodes, axis=0)
 
         return amplitudes
-
-
-class NodeForce:
-    def __init__(self, node_label, dof_ix, amplitudes, local):
-        
-        if type(dof_ix) is not list:
-            dof_ix = [dof_ix]
-        if type(amplitudes) is not list:
-            amplitudes = [amplitudes]
-            
-        self.node_label = node_label
-        self.dof_ix = dof_ix            # potentially multiple dofs per node
-        self.amplitudes = amplitudes      # matching number of amplitudes (as dofs) per node
-        self.local = local              # True or False, currently assumed False
