@@ -7,14 +7,14 @@ from ..general import ensure_list, compatibility_matrix as compmat, lagrange_con
 from copy import deepcopy as copy
 
 class ElDef:
-    def __init__(self, nodes, elements, constraints=None, constraint_type='none', domain='3d', features=None, assemble=True):
+    def __init__(self, nodes, elements, constraints=None, include_linear_kg=False, constraint_type='none', domain='3d', features=None, assemble=True):
         self.nodes = nodes
         self.elements = elements
         self.assign_node_dofcounts()
         self.k, self.m, self.c, self.kg = None, None, None, None
         self.domain = domain
         self.dim = 2 if domain=='2d' else 3
-
+        self.include_linear_kg=include_linear_kg
         if set([el.domain for el in self.elements]) != set([domain]):
             raise ValueError('Element domains has to match ElDef/Part/Assembly.')
         
@@ -99,7 +99,10 @@ class ElDef:
         self.assign_node_dofcounts() # ? 
         self.assign_global_dofs()
         self.m, self.c, self.k, self.kg = self.global_element_matrices(constraint_type=constraint_type)
-
+        
+        if self.include_linear_kg:
+            self.k = self.k + self.kg
+            
     def discard_unused_elements(self): #only elements connected to two nodes are kept
         discard_ix = []
         for element in self.elements:

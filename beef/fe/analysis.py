@@ -104,7 +104,7 @@ class Analysis:
 ## New code placed here ##
 
 class AnalysisCR:
-    def __init__(self, eldef, forces=None, prescribed_displacements=None, tmax=1, dt=1, itmax=10, t0=0, tol=None, nr_modified=False, newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, outputs=['u'], tol_fun=np.linalg.norm):
+    def __init__(self, eldef, forces=None, prescribed_N=None, prescribed_displacements=None, tmax=1, dt=1, itmax=10, t0=0, tol=None, nr_modified=False, newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, outputs=['u'], tol_fun=np.linalg.norm):
         if forces is None:
             forces = []
         if prescribed_displacements is None:
@@ -117,6 +117,7 @@ class AnalysisCR:
         self.prescr_disp = prescribed_displacements
         self.t = np.arange(t0, tmax+dt, dt)
         self.itmax = itmax
+        self.prescribed_N = prescribed_N
 
         # Change later:
         # self.dof_pairs = np.vstack([self.eldef.dof_pairs, self.get_dof_pairs_from_prescribed_displacements()])
@@ -219,6 +220,12 @@ class AnalysisCR:
             # Increment force iterator object
             f_prev = 1.0 * f  # copy previous force level (used to scale residual for convergence check)         
             f = L.T @ self.get_global_forces(self.t[k+1]) # force in increment k+1
+            
+            if self.prescribed_N is not None:
+                N = self.prescribed_N(self.t[k+1])
+                for ix, el in enumerate(self.eldef.elements):
+                    el.N0 = N[ix]
+            
             df = f - f_prev    # force increment
             
             # Save "previous" values
@@ -258,9 +265,10 @@ class AnalysisCR:
                 if not self.run_all_iterations and converged:
                     break
                 
-                # Assemble tangent stiffness, and damping matrices
-                K = L.T @ self.eldef.k @ L
-                C = L.T @ self.eldef.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M 
+                # Assemble tangent stiffness, and damping matrices 
+                if ~self.nr_modified:
+                    K = L.T @ self.eldef.k @ L
+                    C = L.T @ self.eldef.c @ L + self.rayleigh['stiffness']*K + self.rayleigh['mass']*M 
             
                 # Update "previous" step values
                 u_prev = 1.0*u

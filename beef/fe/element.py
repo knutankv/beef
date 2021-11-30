@@ -98,7 +98,7 @@ class BeamElement:
         return self.nodes[0].ndofs + self.nodes[1].ndofs
 
 class BeamElement2d(BeamElement):
-    def __init__(self, nodes, label, section=Section(), shear_flexible=False, mass_formulation='timoshenko', nonlinear=True, N0=0):
+    def __init__(self, nodes, label, section=Section(), shear_flexible=False, mass_formulation='timoshenko', nonlinear=True, N0=None):
         self.nodes = nodes
         self.label = int(label)
         self.section = section
@@ -270,8 +270,12 @@ class BeamElement2d(BeamElement):
 
     def get_local_kg(self, N=None):
         if N is None:
-            N = self.N
+            if self.N0 is None:
+                N = self.N
+            else:
+                N = self.N0
             
+
         L = self.L0
         return np.array([
                     [0, 0, 0, 0, 0, 0],
@@ -351,7 +355,7 @@ class BeamElement2d(BeamElement):
         return self.tmat.T @ self.get_S() @ self.get_Kd_g() @ self.get_S().T @ self.tmat #from corotated formulation
 
 class BeamElement3d(BeamElement):
-    def __init__(self, nodes, label=None, section=Section(), mass_formulation='consistent', shear_flexible=False, nonlinear=False, e2=None, N0=0, left_handed_csys=False):
+    def __init__(self, nodes, label=None, section=Section(), mass_formulation='consistent', shear_flexible=False, nonlinear=False, e2=None, N0=None, left_handed_csys=False):
         self.nodes = nodes
         self.label = label
         self.section = section
