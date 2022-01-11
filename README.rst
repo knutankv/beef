@@ -1,4 +1,4 @@
-.. image:: beef-logo.svg
+.. image:: beef-logo.png
     :width: 300px
 
 
