@@ -1,13 +1,14 @@
 import numpy as np
 
+## NOT USED IN CURRENT VERSION - MIGHT BE INCLUDED IN FUTURE. NOW ANALYSES ARE SINGLE-STEP ONLY.
 #%% Step class definitions
 class Step:
-    def __init__(self, step_type, initial_state_from=None, loads=None):
+    def __init__(self, step_type, initial_state_from=None, forces=None):
         self.type = step_type    
-        self.loads = loads
+        self.forces = forces
         self.initial_state_from = initial_state_from
         self.results = dict()
-        self.global_loads = None
+        self.global_forces = None
 
 
     # CORE METHODS
@@ -19,8 +20,8 @@ class Step:
 
 
     def prepare(self):
-        if self.loads is not None:
-            self.global_loads = self.analysis.global_load(self)
+        if self.forces is not None:
+            self.global_forces = self.analysis.global_forces(self)
 
 
     def adjust_response_final(self, r_in, as_type=float):
@@ -66,7 +67,7 @@ class StaticStep(Step):
 
     def solve(self, analysis):
         K = analysis.eldef.global_matrices['K']
-        u = (np.linalg.inv(K) @ self.global_loads) 
+        u = (np.linalg.inv(K) @ self.global_forces) 
         self.results['u'] = self.adjust_response_final(u) 
         self.results['R'] = -self.analysis.eldef.B.T @ u[-self.analysis.eldef.constraint_dof_count():, :] 
 

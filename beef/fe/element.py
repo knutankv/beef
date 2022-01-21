@@ -71,14 +71,16 @@ class BeamElement:
     def update_m(self):
         self.m = self.tmat.T @ self.get_local_m() @ self.tmat
 
+    def update_k(self):
+        self.k = self.tmat.T @ self.get_local_k() @ self.tmat
+
     def update_geometry(self):
         self.L = self.get_length()
         self.e = self.get_e()
         self.tmat = self.get_tmat()   
         self.psi = self.get_psi(return_phi=False)
 
-    def update_k(self):
-        self.k = self.tmat.T @ self.get_local_k() @ self.tmat
+
 
     # ---------------- NODE-BASED PROPERTIES --------------
     @property
@@ -355,7 +357,7 @@ class BeamElement2d(BeamElement):
         return self.tmat.T @ self.get_S() @ self.get_Kd_g() @ self.get_S().T @ self.tmat #from corotated formulation
 
 class BeamElement3d(BeamElement):
-    def __init__(self, nodes, label=None, section=Section(), mass_formulation='consistent', shear_flexible=False, nonlinear=False, e2=None, N0=None, left_handed_csys=False):
+    def __init__(self, nodes, label=None, section=Section(), mass_formulation='consistent', shear_flexible=False, nonlinear=False, e2=None, N0=0, left_handed_csys=False):
         self.nodes = nodes
         self.label = label
         self.section = section
@@ -391,6 +393,7 @@ class BeamElement3d(BeamElement):
         self.initiate_nodes()
         self.L0 = self.get_length()   
         self.update_geometry()
+        self.update_m()
         self.update()        
 
     # ------------- INITIALIZATION ----------------------
@@ -586,7 +589,9 @@ class BeamElement3d(BeamElement):
 
     # --------------- FE UPDATING ---------------------------------
     def update_linear(self):
-        pass
+        self.update_k()
+        self.update_m()
+        self.q = np.zeros(12)
 
     # --------------- POST PROCESSING ------------------------------
     def extract_load_effect(self, load_effect):
@@ -600,6 +605,7 @@ class BeamElement3d(BeamElement):
     
 
 class BarElement3d(BeamElement3d):
+    # Only geometric stiffness included
     def get_local_kg(self, N=None):
         if N is None:
             N = self.N0

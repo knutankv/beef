@@ -13,7 +13,7 @@ else:
 ## OLD CODE HERE ##
 
 #%% Analysis class definition
-class Analysis:
+class Analysis_LEGACY:
     def __init__(self, eldef, steps=None, constraint_type='lagrange'):
         self.eldef = copy(eldef) # keep a copy of the assembly - avoid tampering with original assembly
         self.steps = steps
@@ -73,13 +73,13 @@ class Analysis:
                 dof_ix = self.eldef.node_label_to_dof_ix(node.label)
                 node.steps[step_ix] = step.results['u'][dof_ix, :]
                 
-    def global_load(self, step):        #consider to redefine as Step method  
+    def global_forces(self, step):        #consider to redefine as Step method  
         #Not ready for n_dofs != 6
         
         all_node_labels = self.eldef.get_node_labels()
         g_load = np.zeros([len(all_node_labels)*6, 1])
         
-        for load in step.loads:
+        for load in step.forces:
             for nodeload in load.nodeloads:
                 node_ix = np.where(all_node_labels == nodeload.node_label)[0]
                 if nodeload.local:
@@ -102,9 +102,13 @@ class Analysis:
         
 
 ## New code placed here ##
+# Consider adding steps? See legacy cpde above.
+class Analysis:
+    def __init__(self, eldef, forces=None, prescribed_N=None, prescribed_displacements=None, 
+        tmax=1, dt=1, itmax=10, t0=0, tol=None, nr_modified=False, 
+        newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, 
+        outputs=['u'], tol_fun=np.linalg.norm):
 
-class AnalysisCR:
-    def __init__(self, eldef, forces=None, prescribed_N=None, prescribed_displacements=None, tmax=1, dt=1, itmax=10, t0=0, tol=None, nr_modified=False, newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, outputs=['u'], tol_fun=np.linalg.norm):
         if forces is None:
             forces = []
         if prescribed_displacements is None:
@@ -119,10 +123,13 @@ class AnalysisCR:
         self.itmax = itmax
         self.prescribed_N = prescribed_N
 
+        if 'alpha' not in newmark_factors:
+            newmark_factors['alpha'] = 1.0
+
         # Change later:
         # self.dof_pairs = np.vstack([self.eldef.dof_pairs, self.get_dof_pairs_from_prescribed_displacements()])
         self.dof_pairs = self.eldef.dof_pairs
-        self.Linv = dof_pairs_to_Linv(self.dof_pairs, len(self.eldef.nodes)*3)
+        self.Linv = dof_pairs_to_Linv(self.dof_pairs, len(self.eldef.nodes)*(self.eldef.dim-1)*3)
         
         min_dt = np.min(np.array([force.min_dt for force in self.forces+self.prescr_disp]))
 
