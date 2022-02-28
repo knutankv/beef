@@ -14,16 +14,21 @@ class ElDef:
         self.k, self.m, self.c, self.kg = None, None, None, None
         self.domain = domain
         self.dim = 2 if domain=='2d' else 3
-        self.include_linear_kg=include_linear_kg
+
+        self.include_linear_kg = include_linear_kg
+
         if set([el.domain for el in self.elements]) != set([domain]):
             raise ValueError('Element domains has to match ElDef/Part/Assembly.')
         
         # Constraints
         self.constraints = constraints 
         self.constraint_type = constraint_type
-        self.dof_pairs = self.constraint_dof_ix()               #PATCH for compatibility with nlfe2d module
-        self.gdof_ix_from_nodelabels = lambda node_labels, dof_ix: gdof_ix_from_nodelabels(self.get_node_labels(), node_labels, dof_ix=dof_ix)  #PATCH for compatibility with nlfe2d module
-        
+
+        # ***** Patches for compatibility with inclusion of nlfe2d module ***
+        self.dof_pairs = self.constraint_dof_ix()               
+        self.gdof_ix_from_nodelabels = lambda node_labels, dof_ix: gdof_ix_from_nodelabels(self.get_node_labels(), node_labels, dof_ix=dof_ix)
+        # ********************************************************************
+
         if len(set(self.get_node_labels()))!=len(self.get_node_labels()):
             raise ValueError('Non-unique node labels defined.')
         
@@ -201,7 +206,12 @@ class ElDef:
               
         
     def node_label_to_node_ix(self, node_label):
-        node_ix = np.where(self.get_node_labels()==node_label)[0][0].astype(int)
+        node_ix = np.where(self.get_node_labels()==node_label)
+        if len(node_ix[0])>0:
+            node_ix = node_ix[0][0].astype(int)
+        else:
+            raise ValueError(f'Invalid node requested. Node {node_label} not present.')
+
         return node_ix
     
     
@@ -282,8 +292,8 @@ class ElDef:
         
     
     # CONSTRAINT METHODS   
-    def constraint_dof_ix(self):        
-        if self.constraints is None:
+    def constraint_dof_ix(self):   
+        if self.constraints is None or len(self.constraints)==0:
             return None
 
         c_dof_ix = []

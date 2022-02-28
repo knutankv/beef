@@ -2,7 +2,8 @@ from copy import deepcopy as copy
 import numpy as np
 from beef import gdof_from_nodedof, compatibility_matrix, B_to_dofpairs, dof_pairs_to_Linv, lagrange_constrain, convert_dofs, convert_dofs_list, ensure_list, gdof_ix_from_nodelabels, basic_coupled, blkdiag
 from scipy.linalg import block_diag, null_space as null, solve
-from beef import newmark
+from beef import newmark 
+from beef.modal import normalize_phi, statespace
 from beef.newmark import is_converged, factors_from_alpha
 import sys
 
@@ -102,7 +103,7 @@ class Analysis_LEGACY:
         
 
 ## New code placed here ##
-# Consider adding steps? See legacy cpde above.
+# Consider adding steps? See legacy code above.
 class Analysis:
     def __init__(self, eldef, forces=None, prescribed_N=None, prescribed_displacements=None, 
         tmax=1, dt=1, itmax=10, t0=0, tol=None, nr_modified=False, 
@@ -116,7 +117,7 @@ class Analysis:
 
         
         self.eldef = copy(eldef)  #create copy of part, avoid messing with original part definition
-        
+
         self.forces = forces
         self.prescr_disp = prescribed_displacements
         self.t = np.arange(t0, tmax+dt, dt)
@@ -124,22 +125,23 @@ class Analysis:
         self.prescribed_N = prescribed_N
 
         if 'alpha' not in newmark_factors:
-            newmark_factors['alpha'] = 1.0
+            newmark_factors['alpha'] = 0.0
 
         # Change later:
         # self.dof_pairs = np.vstack([self.eldef.dof_pairs, self.get_dof_pairs_from_prescribed_displacements()])
         self.dof_pairs = self.eldef.dof_pairs
         self.Linv = dof_pairs_to_Linv(self.dof_pairs, len(self.eldef.nodes)*(self.eldef.dim-1)*3)
         
-        min_dt = np.min(np.array([force.min_dt for force in self.forces+self.prescr_disp]))
+        if len(forces)!=0:
+            min_dt = np.min(np.array([force.min_dt for force in self.forces+self.prescr_disp]))
 
-        if len(self.t)==1:
-            this_dt = np.nan
-        else:
-            this_dt = np.diff(self.t)[0]
+            if len(self.t)==1:
+                this_dt = np.nan
+            else:
+                this_dt = np.diff(self.t)[0]
 
-        if (this_dt-min_dt)>np.finfo(np.float32).eps:
-            print(f'A time increment ({this_dt}) larger than the lowest used for force definitions ({min_dt}) is specified. Interpret results with caution!')
+            if (this_dt-min_dt)>np.finfo(np.float32).eps:
+                print(f'A time increment ({this_dt}) larger than the lowest used for force definitions ({min_dt}) is specified. Interpret results with caution!')
   
         # Tolerance dictionary update (add only specified values, otherwise keep as None)
         tol0 = {'u': None, 'r': None}     
@@ -188,7 +190,6 @@ class Analysis:
     
     def get_global_force_history(self, t):
         return np.vstack([self.get_global_forces(ti) for ti in t]).T
-
 
 
     def run_dynamic(self, print_progress=True, return_results=False):
@@ -369,7 +370,31 @@ class Analysis:
         phi_b = np.real(np.vstack([self.eldef.L @ phi_b[:, ix] for ix in range(0, len(lambd_b))]).T)
 
         return lambd_b, phi_b
+
         
+    def run_eig(self, return_full=False, return_complex=False, normalize_modes=True):
+        M, C, K, __ = self.eldef.global_element_matrices(constraint_type='primal')
+        C = C + M*self.rayleigh['mass'] + K*self.rayleigh['stiffness']  # Rayleigh damping
+
+        A = statespace(K, C, M)
+        lambd, phi = np.linalg.eig(A)
+
+        if normalize_modes:
+            phi = normalize_phi(phi)
+ 
+        if return_full:
+            return lambd, phi
+        else:
+            __, ix = np.unique(np.abs(lambd), return_index=True)
+            n_dofs = M.shape[0]
+            phi =  self.eldef.L @ phi[:n_dofs, ix]
+            lambd = lambd[ix]
+            if normalize_modes:
+                    phi = normalize_phi(phi)
+            if ~return_complex:
+                phi = np.real(phi)
+           
+        return lambd, phi
 
     def run_static(self, print_progress=True, return_results=False):
         # Retrieve constant defintions

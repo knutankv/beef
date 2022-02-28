@@ -280,4 +280,3 @@ def basic_coupled():
 #     keep_dof_ix_phi = np.hstack([np.arange(ix*6, ix*6+6) for ix in keep_ix_phi])
 
 #     return keep_ix_part_nodes, keep_dof_ix_phi
-

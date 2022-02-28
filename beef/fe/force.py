@@ -14,10 +14,10 @@ class Force:
         self.node_labels = node_labels
 
         if t is None:
-                self.evaluate = lambda __: amplitudes[:, 0]  # output constant force regardless
+            self.evaluate = lambda __: amplitudes[:, 0]  # output constant force regardless
         else:
             if np.array(t).ndim==0:
-                t = np.array([0, t])    # assume max time is specified (ramping)
+                t = np.array([0, t])    # assume max time is specified (linear ramp)
                 if amplitudes.shape[1] == 1:
                     amplitudes = np.hstack([amplitudes*0, amplitudes])
             else:

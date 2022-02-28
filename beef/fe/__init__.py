@@ -1,6 +1,5 @@
 # External functions
 import numpy as np
-from scipy.sparse.linalg import eigsh
 from scipy.linalg import null_space, eig
 from datetime import datetime
 
@@ -18,6 +17,9 @@ from .step import *
 
 from .analysis import *
 from .results import *
+
+__all__ = ['node', 'element', 'section', 'constraint',
+          'features', 'eldef', 'force', 'step', 'analysis', 'results']
 
 import sys
 if any('jupyter' in arg for arg in sys.argv):
