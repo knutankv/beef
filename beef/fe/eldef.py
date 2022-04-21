@@ -103,6 +103,7 @@ class ElDef:
 
         self.assign_node_dofcounts() # ? 
         self.assign_global_dofs()
+        self.ndim = np.sum(self.get_all_ndofs())
         self.m, self.c, self.k, self.kg = self.global_element_matrices(constraint_type=constraint_type)
         
         if self.include_linear_kg:
@@ -152,18 +153,7 @@ class ElDef:
 
     def get_nodes(self, nodelabels):
         return [self.nodes[self.nodes.index(int(nodelabel))] for nodelabel in nodelabels]
-    
-    def all_dof_ixs(self):
-        # Ready for elements with fewer dofs per node!
-    
-        n_dofs = 0
-        
-        for node_label in self.get_node_labels():
-            n_dofs += max([el.dofs_per_node for el in self.elements_with_node(node_label, return_node_ix=False)])
-            
-        dof_ix = np.arange(0, int(n_dofs))
-        return dof_ix  
-    
+       
     def get_node_subset(self, nodes):
         subset = copy(self)
         subset.nodes = [node for node in self.nodes if node in nodes]
@@ -364,13 +354,11 @@ class ElDef:
 
 
     # GENERATE OUTPUT FOR ANALYSIS    
-    def global_element_matrices(self, constraint_type=None):
-        ndim = len(self.all_dof_ixs())
-        
-        mass = np.zeros([ndim, ndim])
-        stiffness = np.zeros([ndim, ndim])
-        geometric_stiffness = np.zeros([ndim, ndim])
-        damping = np.zeros([ndim, ndim])
+    def global_element_matrices(self, constraint_type=None):        
+        mass = np.zeros([self.ndim, self.ndim])
+        stiffness = np.zeros([self.ndim, self.ndim])
+        geometric_stiffness = np.zeros([self.ndim, self.ndim])
+        damping = np.zeros([self.ndim, self.ndim])
         
         # Engineering features (springs, dashpots, point masses, etc.) not implemented
         # Should add possibility to add spring/dashpot between two nodes also.

@@ -5,7 +5,7 @@ with open("README.rst", "r") as fh:
 
 setuptools.setup(
     name="beef-knutankv",
-    version="1.0.0",
+    version="0.1.0",
     author="Knut Andreas Kvåle",
     author_email="knut.a.kvale@gmail.com",
     description="BEam Elements Framework for Python.",
