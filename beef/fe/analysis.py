@@ -387,10 +387,10 @@ class Analysis:
         else:
             __, ix = np.unique(np.abs(lambd), return_index=True)
             n_dofs = M.shape[0]
-            phi =  self.eldef.L @ phi[:n_dofs, ix]
+            phi = self.eldef.L @ phi[:n_dofs, ix]
             lambd = lambd[ix]
             if normalize_modes:
-                    phi = normalize_phi(phi)
+                phi = normalize_phi(phi)
             if ~return_complex:
                 phi = np.real(phi)
            

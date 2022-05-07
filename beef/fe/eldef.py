@@ -24,10 +24,8 @@ class ElDef:
         self.constraints = constraints 
         self.constraint_type = constraint_type
 
-        # ***** Patches for compatibility with inclusion of nlfe2d module ***
-        self.dof_pairs = self.constraint_dof_ix()               
-        self.gdof_ix_from_nodelabels = lambda node_labels, dof_ix: gdof_ix_from_nodelabels(self.get_node_labels(), node_labels, dof_ix=dof_ix)
-        # ********************************************************************
+        # TODO: Currently use this patch for inclusion of nlfe2d - fix.
+        self.dof_pairs = self.constraint_dof_ix()    
 
         if len(set(self.get_node_labels()))!=len(self.get_node_labels()):
             raise ValueError('Non-unique node labels defined.')
@@ -62,6 +60,10 @@ class ElDef:
             self.update_tangent_stiffness()
             self.update_internal_forces()
             self.update_mass_matrix()
+
+    # TODO: Currently use this patch for inclusion of nlfe2d - fix.
+    def gdof_ix_from_nodelabels(self, node_labels, dof_ix):    
+        return gdof_ix_from_nodelabels(self.get_node_labels(), node_labels, dof_ix=dof_ix)
 
     @property
     def ndofs(self):
@@ -212,6 +214,10 @@ class ElDef:
         return dof_ix
 
     # MODIFIERS
+    def update_geometry_to_deformed(self):
+        for node in self.nodes:
+            node.x0 = node.x*1  # make deformed structure new reference
+    
     def deform(self, u, update_tangents=True):
         for node in self.nodes:
             node.u = u[node.global_dofs]
