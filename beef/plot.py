@@ -40,8 +40,10 @@ def initialize_plot(canvas={}, view=None, cam={}, elements=None, title='BEEF Ele
 def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements=None, canvas={}, hold_on=False, view=None, cam={}, 
                   tmat_scaling=1, plot_tmat_ax=None, plot_nodes=False, node_labels=False, element_labels=False, element_label_settings={}, node_label_settings={}, 
                   element_settings={}, node_settings={}, sel_node_settings={}, sel_element_settings={}, sel_node_label_settings={}, sel_element_label_settings={}, 
-                  tmat_settings={}, deformed_element_settings={}, title='BEEF Element plot'):   
-                      
+                  tmat_settings={}, deformed_element_settings={}, title='BEEF Element plot', domain='3d'):   
+    
+    # TODO: MAKE 2D compatible
+    
     el_settings = dict(color='#008800')
     el_settings.update(**element_settings)
 

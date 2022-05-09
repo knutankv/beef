@@ -160,7 +160,7 @@ class Analysis:
 
 
     def get_dof_pairs_from_prescribed_displacements(self):
-        prescr_ix = [np.hstack([self.eldef.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(pd.node_labels, pd.dof_ix)]).flatten() for pd in self.prescr_disp]
+        prescr_ix = [np.hstack([self.eldef.node_dof_lookup(nl, dof_ix=dix)for nl, dix in zip(pd.node_labels, pd.dof_ix)]).flatten() for pd in self.prescr_disp]
         dof_pairs = np.vstack([[pi, None] for pi in prescr_ix])
         return dof_pairs
         
@@ -168,7 +168,7 @@ class Analysis:
     def get_global_forces(self, t):  
         glob_force = np.zeros(self.eldef.ndofs)
         for force in self.forces:
-            dof_ix = np.hstack([self.eldef.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(force.node_labels, force.dof_ix)]).flatten()
+            dof_ix = np.hstack([self.eldef.node_dof_lookup(nl, dof_ix=dix) for nl, dix in zip(force.node_labels, force.dof_ix)]).flatten()
             glob_force[dof_ix] += force.evaluate(t)
         
         return glob_force
@@ -177,7 +177,7 @@ class Analysis:
         glob_displacement = np.zeros(self.eldef.ndofs)
         dof_ix_full = []
         for pd in self.prescr_disp:
-            dof_ix_add = np.hstack([self.eldef.gdof_ix_from_nodelabels(nl, dix) for nl, dix in zip(pd.node_labels, pd.dof_ix)]).flatten()
+            dof_ix_add = np.hstack([self.eldef.node_dof_lookup(nl, dof_ix=dix) for nl, dix in zip(pd.node_labels, pd.dof_ix)]).flatten()
             glob_displacement[dof_ix_add] += pd.evaluate(t)
             dof_ix_full.append(dof_ix_add)
 

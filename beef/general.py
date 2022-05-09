@@ -27,11 +27,13 @@ def convert_dofs(dofs_in, node_type='beam3d', sort_output=True):
         
 
 def convert_dofs_list(dofs_list_in, n_nodes, node_type='beam3d', sort_output=True):
+    # TODO: Needs some polish. Avoid possible confusion here! What is the most common way to define constraints? Optimize for that.
+
     contains_strings = np.any([type(d) is str for d in dofs_list_in])
     
     if type(dofs_list_in) is not list:  # single input (all, rot or trans)
         dofs_list_out = [dofs_list_in]*n_nodes      
-    elif ~contains_strings and (len(dofs_list_in)!=n_nodes) and (len(dofs_list_in)<=6) and (np.max(dofs_list_in)<6):   #
+    elif ~contains_strings and (len(dofs_list_in)<=6) and (np.max(dofs_list_in)<6):   #
         dofs_list_out = [dofs_list_in]*n_nodes
     elif len(dofs_list_in)!=n_nodes:
         raise TypeError('Wrong input format of "dofs"')

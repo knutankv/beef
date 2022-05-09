@@ -51,9 +51,6 @@ class ElDef:
 
         # Establish features
         self.features = features
-        self.feature_mats = self.global_matrices_from_features()
-            
-        self.c = self.feature_mats['c']
 
         if assemble:
             self.assemble()
@@ -69,18 +66,23 @@ class ElDef:
     def ndofs(self):
         return np.sum([node.ndofs for node in self.nodes])
 
-
-    def global_matrices_from_features(self):
+    def get_feature_mats(self, mats=['k', 'c', 'm']):
         n_dofs = self.ndofs
-        feature_mats = dict(k=np.zeros([n_dofs, n_dofs]), 
-                            c=np.zeros([n_dofs, n_dofs]), 
-                            m=np.zeros([n_dofs, n_dofs]))
+        feature_mats = {key: np.zeros([n_dofs, n_dofs]) for key in mats}
 
         for feature in self.features:
-            ixs = np.array([self.node_dof_lookup(node_label, dof_ix=dof_ix) for node_label, dof_ix in zip(feature.node_labels, feature.dof_ixs)])      
-            feature_mats[feature.type][np.ix_(ixs, ixs)] = feature.matrix
+            if feature.type in mats:
+                for dof_ix in feature.dofs:
+                    ixs = np.array([self.node_dof_lookup(nl, dof_ix=dof_ix) for nl in feature.node_labels]).flatten()
+                    feature_mats[feature.type][np.ix_(ixs, ixs)] = feature.matrix
 
-        return feature_mats
+        feature_list = [feature_mats[key] for key in mats]  # return as list with same order as input
+
+        if len(feature_list) == 1:
+            feature_list = feature_list[0]
+
+        return feature_list 
+
 
     def node_dof_lookup(self, node_label, dof_ix=slice(None)):
         return self.get_node(node_label).global_dofs[dof_ix]
@@ -262,25 +264,22 @@ class ElDef:
     def update_internal_forces(self, u=None):       # on part level
         if u is None:
             u = np.zeros([self.ndofs])
-
-        if hasattr(self, 'feature_mats'):
-            self.q = self.feature_mats['k'] @ u   
-        else:
-            self.q = u*0
+        
+        self.q = self.get_feature_mats(mats=['k']) @ u   
 
         for el in self.elements:
             ixs = np.hstack([el.nodes[0].global_dofs, el.nodes[1].global_dofs])
             self.q[ixs] += el.q
 
     def update_tangent_stiffness(self):
-        self.k = self.feature_mats['k']*1          
+        self.k = self.get_feature_mats(mats=['k'])         
         
         for el in self.elements:
             self.k[np.ix_(el.global_dofs, el.global_dofs)] += el.k
 
     
     def update_mass_matrix(self):
-        self.m = self.feature_mats['m']*1   
+        self.m = self.get_feature_mats(mats=['m'])  
 
         for el in self.elements:
             self.m[np.ix_(el.global_dofs, el.global_dofs)] += el.m
@@ -373,14 +372,15 @@ class ElDef:
 
     # GENERATE OUTPUT FOR ANALYSIS    
     def global_element_matrices(self, constraint_type=None):        
-        mass = np.zeros([self.ndim, self.ndim])
-        stiffness = np.zeros([self.ndim, self.ndim])
-        geometric_stiffness = np.zeros([self.ndim, self.ndim])
-        damping = np.zeros([self.ndim, self.ndim])
+        # Starting point is feature matrices
+        stiffness, damping, mass = self.get_feature_mats()
         
-        # Engineering features (springs, dashpots, point masses, etc.) not implemented
-        # Should add possibility to add spring/dashpot between two nodes also.
-
+        # mass = np.zeros([self.ndim, self.ndim])
+        # stiffness = np.zeros([self.ndim, self.ndim])
+        # damping = np.zeros([self.ndim, self.ndim])
+        
+        geometric_stiffness = np.zeros([self.ndim, self.ndim])
+        
         for el in self.elements:
             dof_ix1, dof_ix2 = el.nodes[0].global_dofs, el.nodes[1].global_dofs
             dof_range = np.r_[dof_ix1, dof_ix2]
@@ -389,10 +389,7 @@ class ElDef:
             mass[np.ix_(dof_range, dof_range)] += el.get_m()
             stiffness[np.ix_(dof_range, dof_range)] += el.get_k()
             geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg()
-        
-        removed_ix = None  
-        keep_ix = None
-        
+
         if self.constraints != None:  
             if constraint_type == 'lagrange':
                 dof_pairs = self.constraint_dof_ix()
