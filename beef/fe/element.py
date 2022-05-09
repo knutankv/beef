@@ -203,8 +203,8 @@ class BeamElement2d(BeamElement):
         section = self.section
 
         k_local[:3, :3] = (1/self.L0**3) * np.array([[section.E*section.A*self.L0**2,0, 0],
-                                  [0, 12*self.psi*section.E*section[1], 6*self.psi*section.E*section.I[1]*self.L0],
-                                  [0, 6*self.psi*section.E*section[1]*self.L0, (3*self.psi+1)*section.E*section.I[1]*self.L0**2]])
+                                  [0, 12*self.psi*section.E*section.I[1], 6*self.psi*section.E*section.I[1]*self.L0],
+                                  [0, 6*self.psi*section.E*section.I[1]*self.L0, (3*self.psi+1)*section.E*section.I[1]*self.L0**2]])
 
         k_local[3:, 3:] = (1/self.L0**3) * np.array([[section.E*section.A*self.L0**2,0,0],
                                   [0, 12*self.psi*section.E*section.I[1], -6*self.psi*section.E*section.I[1]*self.L0],

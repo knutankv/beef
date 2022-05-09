@@ -214,6 +214,18 @@ class ElDef:
         return dof_ix
 
     # MODIFIERS
+    def update_sections(self, sections, element_labels=None, reassemble=True):
+        if element_labels is None:  # all elements, assumed single section object in sections
+            element_labels = self.element_labels()
+            sections = [sections]*len(element_labels)
+
+        for ix, el in enumerate(element_labels):
+            element = self.get_element(el)
+            element.section = sections[ix]
+
+        if reassemble:
+            self.assemble()
+
     def update_geometry_to_deformed(self):
         for node in self.nodes:
             node.x0 = node.x*1  # make deformed structure new reference
