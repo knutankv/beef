@@ -1,7 +1,10 @@
+import cmath
 import numpy as np
 import vispy
 from vispy import visuals, scene
 from copy import deepcopy
+from vispy.color import Colormap
+from vispy.color import get_colormaps
 
 def rm_visuals(view):
     for child in view.children[0].children:
@@ -40,7 +43,8 @@ def initialize_plot(canvas={}, view=None, cam={}, elements=None, title='BEEF Ele
 def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements=None, canvas={}, hold_on=False, view=None, cam={}, 
                   tmat_scaling=1, plot_tmat_ax=None, plot_nodes=False, node_labels=False, element_labels=False, element_label_settings={}, node_label_settings={}, 
                   element_settings={}, node_settings={}, sel_node_settings={}, sel_element_settings={}, sel_node_label_settings={}, sel_element_label_settings={}, 
-                  tmat_settings={}, deformed_element_settings={}, title='BEEF Element plot', domain='3d'):   
+                  tmat_settings={}, deformed_element_settings={}, title='BEEF Element plot', domain='3d',
+                  element_colors=None, colormap_range=None, colormap_name='viridis'):   
     
     # TODO: MAKE 2D compatible
     
@@ -74,6 +78,15 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     tmat_colors = ['#0000ff', '#00ff00', '#ff0000']
     tmatax_settings = dict(arrow_size=1)
     tmatax_settings.update(**tmat_settings)
+
+    # Element colormap
+    cm = get_colormaps()[colormap_name]
+    if element_colors is not None:
+        if colormap_range is not None:
+            element_colors = (np.array(element_colors) - colormap_range[0])/(colormap_range[1] - colormap_range[0])
+
+        element_colors = cm[np.array(np.repeat(element_colors,2, axis=0))].rgba
+        el_settings['color'] = element_colors
 
     # Node coordinates
     nodes = list(set([a for b in [el.nodes for el in elements] for a in b])) #flat list of unique nodes
