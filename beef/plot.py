@@ -5,6 +5,7 @@ from vispy import visuals, scene
 from copy import deepcopy
 from vispy.color import Colormap
 from vispy.color import get_colormaps
+from vispy.util.quaternion import Quaternion
 
 def rm_visuals(view):
     for child in view.children[0].children:
@@ -16,10 +17,16 @@ def initialize_plot(canvas={}, view=None, cam={}, elements=None, title='BEEF Ele
         nodes = list(set([a for b in [el.nodes for el in elements] for a in b])) #flat list of unique nodes
         node_pos = np.vstack([node.coordinates for node in nodes])
         global_cog = np.mean(node_pos, axis=0)
+        d_nodes = np.sum(node_pos**2, axis=1)
+
+        d_max = np.max((d_nodes[:,np.newaxis]-d_nodes[np.newaxis,:]).flatten())
+        distance = 1e-3*d_max
     else: 
         global_cog = np.array([0,0,0])
-
-    cam_settings = dict(up='z', fov=0, distance=2000, center=global_cog)    #standard values
+        distance = 1000
+    
+   
+    cam_settings = dict(up='z', fov=0, distance=distance, center=global_cog)    #standard values
             
 
     if type(canvas) is not scene.SceneCanvas:
@@ -37,6 +44,8 @@ def initialize_plot(canvas={}, view=None, cam={}, elements=None, title='BEEF Ele
     else: # still a dict
         cam_settings.update(**cam)
         view.camera = scene.ArcballCamera(**cam_settings)
+        q = Quaternion(w=-0.5, x=0.654, y=0.302, z=0.245)
+        view.camera.set_state(dict(_quaternion=q))
 
     return view, canvas, view.camera
 
@@ -44,7 +53,7 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
                   tmat_scaling=1, plot_tmat_ax=None, plot_nodes=False, node_labels=False, element_labels=False, element_label_settings={}, node_label_settings={}, 
                   element_settings={}, node_settings={}, sel_node_settings={}, sel_element_settings={}, sel_node_label_settings={}, sel_element_label_settings={}, 
                   tmat_settings={}, deformed_element_settings={}, title='BEEF Element plot', domain='3d',
-                  element_colors=None, colormap_range=None, colormap_name='viridis'):   
+                  element_colors=None, colormap_range=None, colormap_name='viridis', colorbar_limit_format=':.2e'):   
     
     # TODO: MAKE 2D compatible
     
@@ -79,14 +88,51 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     tmatax_settings = dict(arrow_size=1)
     tmatax_settings.update(**tmat_settings)
 
+    # Establish view and canvas    
+    if view is None:
+        view, canvas, cam = initialize_plot(canvas=canvas, cam=cam, elements=elements, title=title)
+    else:
+        canvas = view.canvas
+        cam = view.camera
+
+    if not hold_on:
+        rm_visuals(view)
+
     # Element colormap
     cm = get_colormaps()[colormap_name]
+
     if element_colors is not None:
+        element_colors = np.array(element_colors)
+        nan_ix = np.isnan(element_colors)
+        
         if colormap_range is not None:
             element_colors = (np.array(element_colors) - colormap_range[0])/(colormap_range[1] - colormap_range[0])
 
-        element_colors = cm[np.array(np.repeat(element_colors,2, axis=0))].rgba
+        element_colors = cm[np.array(np.repeat(element_colors, 2, axis=0))].rgba
+        
+        nan_ix = np.isnan(element_colors[:,0])
+        if any(nan_ix):
+            element_colors[nan_ix, :] = 0
+            element_colors[nan_ix, -1] = 0.1
+
+           
         el_settings['color'] = element_colors
+
+        grid = canvas.central_widget.add_grid()
+        cam_cb = scene.TurntableCamera(distance=1.3, fov=0, azimuth=180, roll=0, elevation=90, center= (3.8, 5, 0), interactive=True)
+        
+        view = grid.add_view(row=0, col=0, camera=cam, col_span=4)
+        view_cb = grid.add_view(row=0, col=4, camera=cam_cb, col_span=1) 
+        
+        cb = scene.ColorBarWidget(clim=colormap_range, cmap=cm, orientation="right",
+                                            border_width=1, padding=[0,0], axis_ratio=0.08)
+        
+        text_upper = scene.visuals.Text(text=('{lim1' + colorbar_limit_format + '}').format(lim1=colormap_range[0]), pos=(3.4,10,0), anchor_y='top')
+        text_lower = scene.visuals.Text(text=('{lim1' + colorbar_limit_format + '}').format(lim1=colormap_range[1]), pos=(3.4,0,0), anchor_y='bottom')
+            
+        view_cb.add(cb)     
+        view_cb.add(text_upper)    
+        view_cb.add(text_lower)    
 
     # Node coordinates
     nodes = list(set([a for b in [el.nodes for el in elements] for a in b])) #flat list of unique nodes
@@ -98,15 +144,7 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
 
     unsel_elements = [el for el in elements if el.label not in sel_elements]
     sel_elements = [el for el in elements if el.label in sel_elements]
-    
-    if view is None:
-        view, canvas, cam = initialize_plot(canvas=canvas, cam=cam, elements=elements, title=title)
-    else:
-        canvas = view.canvas
-        cam = view.camera
 
-    if not hold_on:
-        rm_visuals(view)
    
     # Establish element lines
     if len(unsel_elements)>0:
@@ -191,8 +229,8 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     canvas.show()
     axis = scene.visuals.XYZAxis(parent=view.scene)
 
-    return canvas, view
 
+    return canvas, view
 
 def frame_creator(frames=30, repeats=1, swing=False, full_cycle=False):
     
