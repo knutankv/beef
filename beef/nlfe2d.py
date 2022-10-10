@@ -542,37 +542,7 @@ class Part:
             return c_dof_ix
     
     
-    def plot(self, u=None, color='Gray', plot_nodes=False, node_labels=False, element_labels=False, ax=None):
-        
-        if ax is None:
-            ax = plt.gca()
-        
-        dxy = np.zeros([2, 2])
-        
-        for el in self.elements:
-            xy = np.vstack([node.x for node in el.nodes])
 
-            if u is not None:
-                ix1 = np.where(self.node_labels==el.nodes[0].label)[0][0]
-                ix2 = np.where(self.node_labels==el.nodes[1].label)[0][0]
-                
-                dxy[0, :] = u[gdof_from_nodedof(ix1, [0,1]), 0]
-                dxy[1, :] = u[gdof_from_nodedof(ix2, [0,1]), 0]
-
-            
-            plt.plot(xy[:,0]+dxy[:,0], xy[:,1]+dxy[:,1], color=color)
-            
-            if plot_nodes:
-                plt.plot(xy[:,0], xy[:,1], linestyle='none', marker='.', color='Black')
-                
-            if element_labels:
-                plt.text(el.get_cog()[0], el.get_cog()[1], el.label, color='DarkOrange')
-        
-        if node_labels:
-            for node in self.nodes:
-                plt.text(node.x[0], node.x[1], node.label, color='Black')
-
-        return ax
     
 
     def gdof_ix_from_nodelabels(self, node_labels, dof_ix=[0,1,2]):   # copy general function from beef
