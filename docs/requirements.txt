@@ -1,4 +1,0 @@
-sphinxcontrib-bibtex<2.0.0
-recommonmark
-nbsphinx
-sphinx==2.4.0
