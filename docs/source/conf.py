@@ -14,8 +14,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath('../../'))
-matlab_src_dir = os.path.abspath('../../')
-matlab_keep_package_prefix = True
+sys.path.insert(0, os.path.abspath('../'))
+
 from recommonmark.parser import CommonMarkParser
 from recommonmark.transform import AutoStructify
 
@@ -49,7 +49,6 @@ templates_path = ['_templates']
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
-bibtex_bibfiles = ["ref.bib"]
 
 source_suffix = ['.rst', '.md']
 autoclass_content = "class"
