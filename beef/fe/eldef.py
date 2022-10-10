@@ -4,6 +4,7 @@ from .element import *
 from .section import *
 from scipy.linalg import null_space as null
 from ..general import ensure_list, compatibility_matrix as compmat, lagrange_constrain, gdof_ix_from_nodelabels
+from ..modal import statespace
 from copy import deepcopy as copy
 
 class ElDef:
@@ -394,6 +395,7 @@ class ElDef:
             if constraint_type == 'lagrange':
                 dof_pairs = self.constraint_dof_ix()
                 mass = lagrange_constrain(mass, dof_pairs)
+                damping = lagrange_constrain(damping, dof_pairs)
                 stiffness = lagrange_constrain(stiffness, dof_pairs)
                 geometric_stiffness = lagrange_constrain(geometric_stiffness, dof_pairs)
             
@@ -405,7 +407,11 @@ class ElDef:
                 
         return mass, damping, stiffness, geometric_stiffness
     
-        
+    
+    def get_state_matrix(self):
+        m,c,k,kg = self.global_element_matrices(constraint_type='primal')
+        return statespace(k+kg, c, m)
+
     # MISC METHODS
     def get_max_dim(self, max_of_max=True):
         n,__ = self.export_eldef()
