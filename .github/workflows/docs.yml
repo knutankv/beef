@@ -1,41 +1,47 @@
-name: Deploy docs website
+name: website
+
+# build the documentation whenever there are new commits on main
 on:
   push:
     branches:
       - master
+    # Alternative: only build for tags.
+    # tags:
+    #   - '*'
+
+# security: restrict permissions for CI jobs.
+permissions:
+  contents: read
 
 jobs:
-  deploy:
-    name: Deploy
+  # Build the documentation and upload the static HTML files as an artifact.
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Set up Python
-        uses: actions/setup-python@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+
+      # ADJUST THIS: install all dependencies (including pdoc)
+      - run: pip install -e .
+      # ADJUST THIS: build your documentation into docs/.
+      # We use a custom build script for pdoc itself, ideally you just run `pdoc -o docs/ ...` here.
+      - run: pdoc beef -o docs/ --template-dir=./docs/templates/
+
+      - uses: actions/upload-pages-artifact@v1
         with:
-          python-version: 3.8
+          path: docs/
 
-      - uses: actions/cache@v2
-        name: Set up caches
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}
-
-      - name: Checkout repo
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 3
-      - name: Fetch tags
-        run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
-
-      - name: Install dependencies
-        run: |
-          pip install -U pip setuptools wheel
-          pip install -e .
-      - name: Build docs
-        run: time docs/build.sh
-
-      - name: Deploy docs
-        env:
-          GH_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        run: .github/deploy-gh-pages.sh
+  # Deploy the artifact to GitHub pages.
+  # This is a separate job so that only actions/deploy-pages has the necessary permissions.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v1
