@@ -13,7 +13,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/knutankv/beef",
     packages=setuptools.find_packages(),
-    install_requires=['numpy', 'scipy', 'matplotlib', 'vispy'],
+    install_requires=['numpy', 'scipy', 'matplotlib', 'vispy', 'tqdm'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
