@@ -1,4 +1,4 @@
-![BEEF logo](https://raw.githubusercontent.com/knutankv/beef/master/beef-logo.svg)
+![BEEF logo](https://raw.githubusercontent.com/knutankv/beef/master/beef-logo.png)
 =======================
 
 What is beef?
