@@ -1,5 +1,5 @@
 import unittest
-from ..fe import *
+from ..fe.node import Node
 
 class TestThreeDimNode(unittest.TestCase):
     _node = Node(1,[0,1,2])

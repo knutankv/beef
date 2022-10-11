@@ -1,3 +1,7 @@
+'''
+FE objects submodule: element definitions
+'''
+
 import numpy as np
 from .node import *
 from .element import *
@@ -8,7 +12,31 @@ from ..modal import statespace
 from copy import deepcopy as copy
 
 class ElDef:
-    def __init__(self, nodes, elements, constraints=None, include_linear_kg=False, constraint_type='none', domain='3d', features=None, assemble=True):
+    '''
+    Element definition (ElDef) main class.
+
+    Arguments
+    ---------------------------
+    nodes : obj
+        list of node objects
+    elements : obj 
+        list of element objects
+    constraints : obj
+        list of constraints
+    features : obj
+        list of features (springs, dashpots, point masses)
+    include_linear_kg : boolean
+        whether or not to include linearized geometric stiffness from specified axial force (N0 in element objects)
+    constraint_type : {'none', 'lagrange', or 'primal'}
+        constraint to enforce
+    domain : {'3d', '2d'}
+    assemble : boolean, True
+        whether or not to assemble structure automatically upon generation - useful to use False if no computation is used and invertable matrices is not strictly required
+
+    '''
+
+
+    def __init__(self, nodes, elements, constraints=None, features=None, include_linear_kg=False, constraint_type='none', domain='3d', assemble=True):
         self.nodes = nodes
         self.elements = elements
         self.assign_node_dofcounts()

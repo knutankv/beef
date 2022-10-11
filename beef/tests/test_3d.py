@@ -79,7 +79,7 @@ part1 = fe.Part(node_matrix1, element_matrix1, sections1)
 part2 = fe.Part(node_matrix2, element_matrix2, sections2)
 
 assembly = fe.Assembly([part1, part2], constraints=constraints)
-assembly.plot(node_labels=True, element_labels=True)
+# assembly.plot(node_labels=True, element_labels=True)
 
 #%%
 # Create analysis
@@ -87,4 +87,4 @@ forces = [fe.Force([4], [0], [-500e3])] # 500 kN downwards in center node
 analysis = fe.Analysis(assembly, forces=forces)
 analysis.run_static()
 
-analysis.eldef.plot(overlay_deformed=True, plot_nodes=True)
+# analysis.eldef.plot(overlay_deformed=True, plot_nodes=True)
