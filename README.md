@@ -45,8 +45,7 @@ second_part = fe.Part(node_matrix_2, element_matrix_2, sections_2, constraints=c
 assembly = fe.Assembly([first_part, second_part])
 ```    
 
-For details on how to set up a full model, please refer to the examples.
-
+For details on how to set up a full model, please refer to the examples. For code reference visit [knutankv.github.io/beef](https://knutankv.github.io/beef/).
 
 Examples
 =======================
