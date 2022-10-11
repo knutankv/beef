@@ -26,11 +26,11 @@ jobs:
       - run: pip install pdoc3
       # ADJUST THIS: build your documentation into docs/.
       # We use a custom build script for pdoc itself, ideally you just run `pdoc -o docs/ ...` here.
-      - run: pdoc beef -o docs/ --template-dir=docs/templates/
+      - run: pdoc beef --html -o ./docs/  --template-dir=./docs/templates/
 
       - uses: actions/upload-pages-artifact@v1
         with:
-          path: docs/
+          path: docs/beef/
 
   # Deploy the artifact to GitHub pages.
   # This is a separate job so that only actions/deploy-pages has the necessary permissions.
