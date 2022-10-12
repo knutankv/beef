@@ -98,10 +98,19 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     if not hold_on:
         rm_visuals(view)
 
+    # Selected elements
+    if sel_elements is None:
+        sel_elements = []
+
+    sel_ix = np.array([el.label in sel_elements for el in elements])
+    unsel_elements = [el for el in elements if el.label not in sel_elements]
+    sel_elements = [el for el in elements if el.label in sel_elements]
+
     # Element colormap
     cm = get_colormaps()[colormap_name]
 
     if element_colors is not None:
+        element_values = element_colors*1
         element_colors = np.array(element_colors)
         nan_ix = np.isnan(element_colors)
         
@@ -115,8 +124,8 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
             element_colors[nan_ix, :] = 0
             element_colors[nan_ix, -1] = 0.1
 
-           
-        el_settings['color'] = element_colors
+        el_settings['color'] = element_colors[np.repeat(~sel_ix, 2, axis=0),:]
+        elsel_settings['color'] = element_colors[np.repeat(sel_ix, 2, axis=0),:]
 
         grid = canvas.central_widget.add_grid()
         cam_cb = scene.TurntableCamera(distance=1.3, fov=0, azimuth=180, roll=0, elevation=90, center= (3.8, 5, 0), interactive=True)
@@ -137,14 +146,6 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     # Node coordinates
     nodes = list(set([a for b in [el.nodes for el in elements] for a in b])) #flat list of unique nodes
     node_pos = np.vstack([node.coordinates for node in nodes])
-
-    # Selected elements
-    if sel_elements is None:
-        sel_elements = []
-
-    unsel_elements = [el for el in elements if el.label not in sel_elements]
-    sel_elements = [el for el in elements if el.label in sel_elements]
-
    
     # Establish element lines
     if len(unsel_elements)>0:
@@ -182,9 +183,10 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         view.add(element_label_visual)
    
     if len(sel_elements)>0:
+  
         el_cog = [el.get_cog() for el in sel_elements]
-        el_labels = [str(el.label) for el in sel_elements]
-
+        el_labels = [f'{el.label} ({element_values[sel_ix][ix]:.3f})' for ix,el in enumerate(sel_elements)]
+        
         element_label_visual = scene.Text(text=el_labels,  pos=el_cog, **elsellab_settings)
         view.add(element_label_visual)       
 
