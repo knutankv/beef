@@ -1,8 +1,5 @@
 """
-##############################################
 Newmark time simulation module
-##############################################
-All functions related to Newmark solutions.
 """
 
 import numpy as np

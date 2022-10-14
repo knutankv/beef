@@ -1,9 +1,15 @@
+'''
+FE objects submodule: elements
+'''
+
 from ..fe.section import Section
 import numpy as np
 from ..general import transform_unit, blkdiag
 
 class BeamElement:
-    # CORE FUNCTIONS    
+
+
+    # ------------- CORE FUNCTIONS -------------------------------------   
     def __eq__(self, other):
         if isinstance(other, BeamElement):
             return self.label == other.label

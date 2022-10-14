@@ -1,3 +1,7 @@
+'''
+FE objects submodule: analysis definitions
+'''
+
 from copy import deepcopy as copy
 import numpy as np
 from beef import gdof_from_nodedof, compatibility_matrix, B_to_dofpairs, dof_pairs_to_Linv, lagrange_constrain, convert_dofs, convert_dofs_list, ensure_list, gdof_ix_from_nodelabels, basic_coupled, blkdiag
@@ -11,104 +15,45 @@ if any('jupyter' in arg for arg in sys.argv):
     from tqdm import tqdm_notebook as tqdm
 else:
    from tqdm import tqdm
-## OLD CODE HERE ##
 
-#%% Analysis class definition
-class Analysis_LEGACY:
-    def __init__(self, eldef, steps=None, constraint_type='lagrange'):
-        self.eldef = copy(eldef) # keep a copy of the assembly - avoid tampering with original assembly
-        self.steps = steps
-        self.ready = False
-        self.constraint_type = constraint_type
-        #inheritance from previous steps not possible     
-    
-        for step in self.steps:
-            step.analysis = self
-
-    # CORE METHODS
-    def __str__(self):
-        return f'BEEF Analysis ({len(self.steps)} steps, {self.eldef} element definition)'
-
-    def __repr__(self):
-        return f'BEEF Analysis ({len(self.steps)} steps, {self.eldef} element definition)'
-
-    # USEFUL
-    def prepare(self):
-        print('Preparing analysis...')
-        self.eldef.assemble()
-        
-        for step in self.steps:
-            step.prepare()
-        
-        self.ready = True
-        
-        
-    def plot(self, **kwargs):             
-        return _plotters.plot_step_3d(self, **kwargs) 
-    
-    def run(self):
-        if not self.ready:    
-            self.prepare()
-            
-            
-        now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        print('Analysis started {}'.format(now))
-        
-        for step_ix, step in enumerate(self.steps):
-            print('Solving step {}: {}'.format((step_ix+1), (step.type.capitalize()+ ' step') ) )
-            step.solve(self)
-    
-        self.create_node_results()
-        
-        now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        print('Analysis finalized {}'.format(now) )   
-    
-    def create_node_results(self):
-        self.node_results = copy(self.eldef.nodes)
-        for node in self.node_results:
-            node.steps = [None]*len(self.steps)
-        
-        for step_ix, step in enumerate(self.steps):
-
-            for node in self.node_results:
-                dof_ix = self.eldef.node_label_to_dof_ix(node.label)
-                node.steps[step_ix] = step.results['u'][dof_ix, :]
-                
-    def global_forces(self, step):        #consider to redefine as Step method  
-        #Not ready for n_dofs != 6
-        
-        all_node_labels = self.eldef.get_node_labels()
-        g_load = np.zeros([len(all_node_labels)*6, 1])
-        
-        for load in step.forces:
-            for nodeload in load.nodeloads:
-                node_ix = np.where(all_node_labels == nodeload.node_label)[0]
-                if nodeload.local:
-                    T = self.eldef.local_node_csys(nodeload.node_label)
-                else:
-                    T = np.eye(6)
-                    
-                f_local = np.zeros([6,1])
-                f_local[nodeload.dof_ix,0] = np.array(nodeload.amplitudes)               
-
-                g_load[node_ix*6 + np.arange(0, 6), 0] += (T.T @ f_local)[:,0]
-                
-        if self.eldef.constraint_type == 'lagrange':
-            g_load = np.vstack([g_load, np.zeros([self.eldef.constraint_dof_count(),1])])
-            
-        elif self.eldef.constraint_type == 'primal':
-            g_load = self.eldef.L.T @ g_load
-
-        return g_load
-        
-
-## New code placed here ##
-# Consider adding steps? See legacy code above.
 class Analysis:
+    '''
+    Analysis definition class.
+
+    Arguments
+    -----------------
+    eldef : obj
+        BEEF ElementDefinition object
+    forces : obj
+        list of BEEF Force objects
+    prescribed_N : fun
+        function (time instance is input) returning list/array of axial forces ordered in the same manner as the elements are ordered in the element definition
+    prescribed_displacement : fun
+        TODO - not finalized
+    tmax : 1
+        final time value
+    dt : 1  
+        time step
+    itmax : 10
+        maximum number of iterations in each time increment
+    t0 : 0
+        start time
+    tol : dict
+        dictionary specifying tolerance levels for 'u' (displacement) and 'r' (force residual) standard is no tolerances
+    nr_modified : False
+        whether or not to use modified Newton-Raphson (for relevant nonlinear solvers)
+    newmark_factors : {'beta': 0.25, 'gamma': 0.5}
+        dictionary specifying values of beta and gamma (and optionally, alpha for hht)
+    rayleigh : {'stiffness': 0, 'mass': 0}
+        dictionary specifying stiffness and mass proportional damping
+    tol_fun : np.linalg.norm
+        function to apply for tolerance checks
+    '''
+
     def __init__(self, eldef, forces=None, prescribed_N=None, prescribed_displacements=None, 
         tmax=1, dt=1, itmax=10, t0=0, tol=None, nr_modified=False, 
         newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, 
-        outputs=['u'], tol_fun=np.linalg.norm):
+        tol_fun=np.linalg.norm):
 
         if forces is None:
             forces = []
@@ -155,17 +100,39 @@ class Analysis:
         self.newmark_factors = newmark_factors
         self.nr_modified = nr_modified
         self.rayleigh = rayleigh
-        self.outputs = outputs
         self.tol_fun = tol_fun
 
 
     def get_dof_pairs_from_prescribed_displacements(self):
+        '''
+        Get dof pairs list from specified prescribed displacements.
+        
+        Returns 
+        -------------
+        dof_pairs : int
+            list of lists indicating dof_pairs
+
+        '''
         prescr_ix = [np.hstack([self.eldef.node_dof_lookup(nl, dof_ix=dix)for nl, dix in zip(pd.node_labels, pd.dof_ix)]).flatten() for pd in self.prescr_disp]
         dof_pairs = np.vstack([[pi, None] for pi in prescr_ix])
         return dof_pairs
         
 
     def get_global_forces(self, t):  
+        '''
+        Get global force (FE format) at specified time instance.
+
+        Arguments
+        ----------
+        t : float
+            time instance from which to establish global forces
+
+        Returns
+        ----------
+        glob_force : array
+            numpy array with force vector stacked on global format (referring to node/dof stacking of global system)
+
+        '''
         glob_force = np.zeros(self.eldef.ndofs)
         for force in self.forces:
             dof_ix = np.hstack([self.eldef.node_dof_lookup(nl, dof_ix=dix) for nl, dix in zip(force.node_labels, force.dof_ix)]).flatten()
@@ -189,10 +156,42 @@ class Analysis:
 
     
     def get_global_force_history(self, t):
+        '''
+        Get global force (FE format) history (several time instances).
+
+        Arguments
+        ----------
+        t : float
+            time instances from which to establish global forces
+
+        Returns
+        ----------
+        glob_force : array
+            2d numpy array with force vector stacked on global format 
+            (referring to node/dof stacking of global system), at specified
+            time instances
+
+        '''
         return np.vstack([self.get_global_forces(ti) for ti in t]).T
 
 
     def run_dynamic(self, print_progress=True, return_results=False):
+        '''
+        Run dynamic (nonlinear) solution, using parameters and element definition specified in parent Analysis object.
+
+        Arguments
+        --------------
+        print_progress : True
+            whether or not to inform user about progress while running
+        return_results : True
+            whether or not to output the displacement history established (self.u)
+
+        Returns
+        --------------
+        self.u 
+            is returned if specified by setting return_results to True
+        '''
+
         # Retrieve constant defintions
         L = self.eldef.L
         Linv = self.Linv
@@ -305,7 +304,26 @@ class Analysis:
             return self.u
 
 
-    def run_lin_dynamic(self, print_progress=True, solver='full_hht', return_results=False):
+    def run_lin_dynamic(self, solver='full_hht', print_progress=True, return_results=False):
+        '''
+        Run dynamic (linear) solution, using parameters and element definition specified in parent Analysis object.
+
+        Arguments
+        --------------
+        solver : {'full_hht', 'full', 'lin', 'lin_alt'}, optional
+            what step-wise solver to enforce each time step, useful for debugging -
+            corresponds to option input to ´newmark.newmark_lin´
+        print_progress : True
+            whether or not to inform user about progress while running
+        return_results : True
+            whether or not to output the displacement history established (self.u)
+
+        Returns
+        --------------
+        self.u 
+            is returned if specified by setting return_results to True
+        '''
+
         # Retrieve constant defintions
         L = self.eldef.L
         Linv = self.Linv
@@ -342,6 +360,22 @@ class Analysis:
 
 
     def run_lin_buckling(self, return_only_positive=True):
+        '''
+        Run static linearized buckling analysis, using parameters and element definition specified in parent Analysis object.
+
+        Arguments
+        --------------
+        return_only_positive : True
+            whether or not to return only positive half of eigenvalues
+
+        Returns
+        --------------
+        lambd_b : float
+            eigenvalues from buckling analysis        
+        phi_b : float
+            eigenvectors (stacked as columns) from buckling analysis
+        '''
+
         from scipy.linalg import eig as speig
 
         # Retrieve constant defintions
@@ -373,6 +407,27 @@ class Analysis:
 
         
     def run_eig(self, return_full=False, return_complex=False, normalize_modes=True):
+        '''
+        Run dynamic (state space) eigenvalue analysis, using parameters and element definition specified in parent Analysis object.
+
+        Arguments
+        --------------
+        return_full : False
+            whether or not to return the raw result from state space eigenproblem - if False
+            only displacements and one representation of each complex conjugate pair is returned
+        return_complex : False
+            whether or not to return modes as complex representations
+        normalize_modes : True
+            whether or not to normalize modes (ensure largest value is equal to 1)
+
+        Returns
+        --------------
+        lambd : float
+            eigenvalues from analysis        
+        phi : float
+            eigenvectors (stacked as columns) from analysis
+        '''
+
         M, C, K, __ = self.eldef.global_element_matrices(constraint_type='primal')
         C = C + M*self.rayleigh['mass'] + K*self.rayleigh['stiffness']  # Rayleigh damping
 
@@ -397,6 +452,21 @@ class Analysis:
         return lambd, phi
 
     def run_static(self, print_progress=True, return_results=False):
+        '''
+        Run static (nonlinear) solution, using parameters and element definition specified in parent Analysis object.
+
+        Arguments
+        --------------
+        print_progress : True
+            whether or not to inform user about progress while running
+        return_results : True
+            whether or not to output the displacement history established (self.u)
+
+        Returns
+        --------------
+        self.u 
+            is returned if specified by setting return_results to True
+        '''
         # Retrieve constant defintions
         L = self.eldef.L
         n_increments = len(self.t)
@@ -467,6 +537,21 @@ class Analysis:
 
 
     def run_lin_static(self, print_progress=True, return_results=False):
+        '''
+        Run static (linear) solution, using parameters and element definition specified in parent Analysis object.
+
+        Arguments
+        --------------
+        print_progress : True
+            whether or not to inform user about progress while running
+        return_results : True
+            whether or not to output the displacement history established (self.u)
+
+        Returns
+        --------------
+        self.u 
+            is returned if specified by setting return_results to True
+        '''
         # Retrieve constant defintions
         L = self.eldef.L
         n_increments = len(self.t)
