@@ -1,3 +1,7 @@
+'''
+Plotting functions.
+'''
+
 import cmath
 import numpy as np
 import vispy
@@ -8,11 +12,45 @@ from vispy.color import get_colormaps
 from vispy.util.quaternion import Quaternion
 
 def rm_visuals(view):
+    '''
+    Remove visuals from vispy-generated view.
+
+    Arguments
+    ------------
+    view : vispy View object
+        the view to remove visuals from
+
+    '''
     for child in view.children[0].children:
         if type(child) in [scene.Line, scene.visuals.Markers, scene.Text]:
             child.parent = None        
 
 def initialize_plot(canvas={}, view=None, cam={}, elements=None, title='BEEF Element plot'):
+    '''
+    Initialize vispy plot with specified settings. Used prior to `plot_elements`.
+
+    Arguments
+    ------------
+    canvas : SceneCanvas (vispy) object
+        canvas definition for plot
+    view : View (vispy) object, optional
+        view definition for plot
+    cam : Camera (vispy) object, optional
+    elements : Element object, optional
+        list of Element objects used to establish reasonable zoom level
+    title : str, optional
+        name of plot; 'BEEF Element plot' is standard
+
+    Returns
+    ------------
+    view : View (vispy) object
+        resulting view
+    canvas : SceneCanvas (vispy) object
+        resulting canvas
+    camera : Camera (vispy) object
+        resulting camera spec
+
+    '''
     if elements is not None:
         nodes = list(set([a for b in [el.nodes for el in elements] for a in b])) #flat list of unique nodes
         node_pos = np.vstack([node.coordinates for node in nodes])
@@ -54,6 +92,92 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
                   element_settings={}, node_settings={}, sel_node_settings={}, sel_element_settings={}, sel_node_label_settings={}, sel_element_label_settings={}, 
                   tmat_settings={}, deformed_element_settings={}, title='BEEF Element plot', domain='3d',
                   element_colors=None, colormap_range=None, colormap_name='viridis', colorbar_limit_format=':.2e'):   
+
+    '''
+    Plot beam/bar elements.
+
+    Arguments
+    ------------
+    elements : Element object
+        list of Element objects to plot
+    overlay_deformed : False, optional
+        whether or not to plot deformed state of elements overlayed
+    sel_nodes : int, optional
+        list of integer node labels to highlight
+    sel_elements : int, optional
+        list of integer element labels to highlight
+    canvas : vispy.SceneCanvas object
+        canvas definition for plot
+    hold_on : False
+        whether or not to keep visuals from canvas input
+    view : vispy.View object, optional
+        view definition for plot
+    cam : vispy.Camera object, optional
+    tmat_scaling : 1.0, optional
+        scaling used for alternative plotting of transformation matrices
+    plot_tmat_ax : int, optional
+        list of indices describing the axes to be plot (0,1,2 possible); standard value None results in no plot of unit vectors
+    plot_nodes : False, optional
+        whether or not to plot markers at nodes
+    node_labels : False, optional
+        whether or not to show node labels
+    element_labels : False, optional
+        whether or not to show element labels
+    element_label_settings : dict, optional
+        dictionary describing parameters to be added/overwritten to the standard element label properties; 
+        refer to vispy manual for allowed properties for Text objects
+    node_label_settings : dict, optional
+        dictionary describing parameters to be added/overwritten to the standard node label properties; 
+        refer to vispy manual for allowed properties for Text objects
+    element_settings : dict, optional
+        dictionary describing parameters to be added/overwritten to the standard element properties; 
+        refer to vispy manual for allowed properties for Line objects
+    node_settings : dict, optional
+        dictionary describing parameters to be added/overwritten to the standard node properties; 
+        refer to vispy manual for allowed properties for Markers objects
+    sel_node_settings : dict, optional
+        dictionary describing parameters to be added/overwritten to the standard selected node properties; 
+        refer to vispy manual for allowed properties for Markers objects
+    sel_element_settings : dict, optional
+        dictionary describing parameters to be added/overwritten to the standard selected element properties; 
+        refer to vispy manual for allowed properties for Line objects
+    sel_node_label_settings : dict, optional
+        dictionary describing parameters to be added/overwritten to the standard selected node label properties; 
+        refer to vispy manual for allowed properties for Text objects
+    sel_element_label_settings : dict, optional 
+        dictionary describing parameters to be added/overwritten to the standard selected element label properties; 
+        refer to vispy manual for allowed properties for Text objects
+    tmat_settings : dict, optional
+        dictionary describing parameters to be added/overwritten to the standard unit vector (describing the transformation matrix) properties; 
+        refer to vispy manual for allowed properties for Arrow objects
+    deformed_element_settings : dict, optional
+        dictionary describing parameters to be added/overwritten to the standard deformed element properties; 
+        refer to vispy manual for allowed properties for Line objects      
+    title : str, optional
+        name of plot; 'BEEF Element plot' is standard
+    domain : {'3d', '2d'}
+        specification of dimensionality of plot (**only 3d plots are currently supported**)
+    element_colors : float, optional    
+        colors / values to plot elements with, used to show contour plots; length should match the 
+        number of elements
+    colormap_range : float, optional
+        list of min and max values of colormap (standard value None activates autoscaling to max and min values)
+    colormap_name : str, optional 
+        name of colormap ('viridis' is standard)
+    colorbar_limit_format : str, optional
+        format used to create colorbar (':.2e' is standard)
+
+
+    Returns
+    ------------
+    view : vispy.View object
+        resulting view
+    canvas : vispy.SceneCanvas object
+        resulting canvas
+    camera : vispy.Camera object
+        resulting camera spec
+
+    '''
     
     # TODO: MAKE 2D compatible
     
@@ -235,6 +359,25 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     return canvas, view
 
 def frame_creator(frames=30, repeats=1, swing=False, full_cycle=False):
+    '''
+    Construct scaling of value.
+
+    Arguments
+    ------------
+    frames : int, optional
+        number of frames (30 is standard)
+    repeats : int, optional
+        number of repeats (1 is standard)
+    swing : False, optional
+        whether or not to swing back and forth
+    full_cycle : False, optional
+        whether or not to include the full cycle (resulting in initial scaling being -1 rather than 0)
+
+    Returns
+    ----------
+    scaling : float
+        numpy array describing scaling of value to animate
+    '''
     
     if full_cycle:
         d = 2/frames

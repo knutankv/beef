@@ -1,5 +1,6 @@
 """
 Newmark time simulation module
+===============================
 """
 
 import numpy as np
@@ -10,7 +11,7 @@ def is_converged(values, tols, scaling=None):
     """
     Check whether multiple values are below specified tolerances.  (value/scaling)
     
-    Parameters
+    Arguments
     -----------------
     values : double
         list of values to check
@@ -60,7 +61,7 @@ def acc_estimate(K, C, M, f, udot, u=None, f_int=None, dt=None, beta=None, gamma
     Predict acceleration for time integration, based on internal forces, 
         damping matrix, mass matrix, current velocity and external force.
 
-    Parameters:
+    Arguments
     -----------
     K : double
         Next-step (tangent) stiffness matrix (time step k+1), 
@@ -85,7 +86,7 @@ def acc_estimate(K, C, M, f, udot, u=None, f_int=None, dt=None, beta=None, gamma
     gamma : double
         Scalar value specifying the gamma parameter.
 
-    Returns:
+    Returns
     -----------
     uddot : double
         Resulting acceleration array, ndofs-by-1 Numpy array.
@@ -107,7 +108,7 @@ def pred(u, udot, uddot, dt, beta=0, gamma=0):
     """
     Predictor step in non-linear Newmark algorithm.
 
-    Parameters:
+    Arguments
     -----------
     u : double
         Current displacement (time step k), ndofs-by-1 Numpy array.
@@ -128,7 +129,7 @@ def pred(u, udot, uddot, dt, beta=0, gamma=0):
         it is only used in corrector. The chosen values (0) are based
         on Krenk's approach.
 
-    Returns:
+    Returns
     -----------
     u : double
         Predicted next-step displacement (time step k+1), ndofs-by-1 Numpy array.
@@ -150,7 +151,7 @@ def corr(r, K, C, M, u, udot, uddot, dt, beta, gamma):
     """
     Corrector step in non-linear Newmark algorithm.
 
-    Parameters:
+    Arguments
     -----------
     r : double
         Residual forces.
@@ -174,7 +175,7 @@ def corr(r, K, C, M, u, udot, uddot, dt, beta, gamma):
     gamma : double
         Scalar value specifying the gamma parameter.
 
-    Returns:
+    Returns
     -----------
     u : double
         Predicted next-step displacement, time step k+1, iteration i+1, ndofs-by-1 Numpy array.
@@ -203,7 +204,7 @@ def corr_alt(r, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=0.0):
     """
     Corrector step in non-linear Newmark algorithm. Alternative version - uses Meff rather than Keff and allows for alpha damping.
 
-    Parameters:
+    Arguments
     -----------
     r : double
         Residual forces.
@@ -227,7 +228,7 @@ def corr_alt(r, K, C, M, u, udot, uddot, dt, beta, gamma, alpha=0.0):
     gamma : double
         Scalar value specifying the gamma parameter.
 
-    Returns:
+    Returns
     -----------
     u : double
         Predicted next-step displacement, time step k+1, iteration i+1, ndofs-by-1 Numpy array.
@@ -259,7 +260,7 @@ def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/4.0, gamma=0.5
         based on Algorithm 9.2 in Krenk, 2009. Because f_int is not updated each iteration
         this is equivalent to modified NR iteration.
 
-    Parameters:
+    Arguments
     -----------
     K : double
         Next-step (tangent) stiffness matrix (time step k+1), 
@@ -293,7 +294,7 @@ def dnewmark(K, C, M, f, u, udot, uddot, dt, f_int=None, beta=1.0/4.0, gamma=0.5
         Maximum number of iterations allowed per time step / increment.
         
 
-    Returns:
+    Returns
     -----------
     u : double
         Predicted displacement at time step k+1, ndofs-by-1 Numpy array.
@@ -349,7 +350,7 @@ def dnewmark_hht(K, C, M, f, u, udot, uddot, dt, f_prev, f_int=None, beta=1.0/4.
     """
     Incremental formulation of Newmark allowing for alpha-damping.
 
-    Parameters:
+    Arguments
     -----------
     K : double
         Next-step (tangent) stiffness matrix (time step k+1), 
@@ -383,7 +384,7 @@ def dnewmark_hht(K, C, M, f, u, udot, uddot, dt, f_prev, f_int=None, beta=1.0/4.
         Maximum number of iterations allowed per time step / increment.
         
 
-    Returns:
+    Returns
     -----------
     u : double
         Predicted displacement at time step k+1, ndofs-by-1 Numpy array.
@@ -447,7 +448,7 @@ def pred_lin(u, udot, uddot, dt, beta, gamma):
     """
     Predictor step in linear Newmark algorithm.
 
-    Parameters:
+    Arguments
     -----------
     u : double
         Current displacement (time step k), ndofs-by-1 Numpy array.
@@ -462,7 +463,7 @@ def pred_lin(u, udot, uddot, dt, beta, gamma):
     gamma : double
         Scalar value specifying the gamma parameter.
 
-    Returns:
+    Returns
     -----------
     u : double
         Predicted next-step displacement (time step k+1), ndofs-by-1 Numpy array.
@@ -484,7 +485,7 @@ def corr_lin(K, C, M, f, u, udot, uddot, dt, beta, gamma):
     """
     Corrector step in inear Newmark algorithm.
 
-    Parameters:
+    Arguments
     -----------
     K : double
         Next-step (tangent) stiffness matrix (time step k+1), 
@@ -508,7 +509,7 @@ def corr_lin(K, C, M, f, u, udot, uddot, dt, beta, gamma):
     gamma : double
         Scalar value specifying the gamma parameter.
 
-    Returns:
+    Returns
     -----------
     u : double
         Predicted next-step displacement, time step k+1, ndofs-by-1 Numpy array.
@@ -533,7 +534,7 @@ def dnewmark_lin(K, C, M, f, u, udot, uddot, dt, beta=1.0/4.0, gamma=0.5):
     """
     Combined (predictor-corrector) stepwise linear Newmark based on Algorithm 9.1 in Krenk, 2009.
 
-    Parameters:
+    Arguments
     -----------
     K : double
         Stiffness matrix, ndofs-by-ndofs Numpy array.
@@ -557,7 +558,7 @@ def dnewmark_lin(K, C, M, f, u, udot, uddot, dt, beta=1.0/4.0, gamma=0.5):
         Scalar value specifying the gamma parameter.
         
 
-    Returns:
+    Returns
     -----------
     u : double
         Predicted displacement at time step k+1, ndofs-by-1 Numpy array.
@@ -582,7 +583,7 @@ def dnewmark_lin_alt(K, C, M, df, u, udot, uddot, dt, beta=1.0/4.0, gamma=0.5):
     """
     Alternative implementation, stepwise linear Newmark.
 
-    Parameters:
+    Arguments
     -----------
     K : double
         Stiffness matrix, ndofs-by-ndofs Numpy array.
@@ -606,7 +607,7 @@ def dnewmark_lin_alt(K, C, M, df, u, udot, uddot, dt, beta=1.0/4.0, gamma=0.5):
         Scalar value specifying the gamma parameter.
         
 
-    Returns:
+    Returns
     -----------
     u : double
         Predicted displacement at time step k+1, ndofs-by-1 Numpy array.
@@ -641,7 +642,7 @@ def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/4.0, gamma=0.5, solver='full_
     Combined linear Newmark (predictor-corrector), full time history.
 
     
-    Parameters:
+    Arguments
     -----------
     K : double
         Stiffness matrix, ndofs-by-ndofs Numpy array.
@@ -667,7 +668,7 @@ def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/4.0, gamma=0.5, solver='full_
         Only used when 'nonlin_hht' is enforced
     
 
-    Returns:
+    Returns
     -----------
     u : double
         Predicted displacement time history, ndofs-by-nsamples Numpy array.
@@ -732,12 +733,12 @@ def factors_from_alpha(alpha):
 def factors(version='linear'):
     """ Gamma and beta factors for Newmark. Alpha is also output as zero, for convenience.
     
-    Parameters:
+    Arguments
     --------------
     version : {'linear', 'constant', 'average', 'fox-goodwin'}, optional
         String characterizing what method to use for Newmark simulation.
     
-    Returns:
+    Returns
     -------------
     beta : double
         Beta factor for Newmark analysis.

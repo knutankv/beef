@@ -1,3 +1,7 @@
+'''
+Legacy code for two-dimensional corotational analysis.
+'''
+
 from scipy.linalg import block_diag, null_space as null, solve
 import numpy as np
 from beef import newmark

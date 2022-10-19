@@ -1,3 +1,7 @@
+'''
+FE objects submodule: results and post-processing definitions
+'''
+
 import numpy as np
 from copy import deepcopy as copy
 import sys
@@ -7,9 +11,47 @@ else:
    from tqdm import tqdm
 
 class Results:
-    def __init__(self, analysis, element_results=['M', 'N', 'V'], node_results=[], fun_dict={}):
-        # fun_dict uses analysis level as expected input
+    '''
+    Force definition class. 
+
+    Arguments
+    -------------
+    analysis : Analysis obj
+        `Analysis` object to post-process
+    element_results : str, optional
+        list of requested element results ('M', 'N' and 'V' currently available)
+    node_results : [], optional
+        list of requested node results (no standard values available yet)
+    fun_dict : dict, optional
+        dictionary
+
+
+    Example
+    -------------
+    The usage of `fun_dict` is exemplified using an moving state space eigenvalue solution. First, 
+    a custom function returning a function acting on the analysis object is required (the returned function is required to have 
+    the `Analysis` object as its only input). The function used in this example returns the eigenvalues of the analysis:
         
+        def fun_ss_eigs():
+            def f(analysis):
+                A = analysis.eldef.get_state_matrix()
+                eigs,__ = np.linalg.eig(A)
+                return eigs
+                
+            return f
+    
+    Thereafter, the `fun_dict` can be passed as a variable into the Results constructor function as follows:
+
+        fun_dict = {'stab_eigs': fun_ss_eigs()}
+        results = fe.Results(analysis, fun_dict=fun_dict)
+        results.process()
+
+    The resulting output in results will have the same structure, i.e., the eigenvalues can be accessed from `results.output['stab_eigs']`.
+
+    '''
+
+
+    def __init__(self, analysis, element_results=['M', 'N', 'V'], node_results=[], fun_dict={}):        
         self.analysis = copy(analysis)
         self.output = None
         self.element_results = element_results
@@ -18,6 +60,23 @@ class Results:
         self.fun_dict = fun_dict
         
     def process(self, print_progress=True, nonlinear=True):
+        ''' 
+        Process the requested results.
+
+        Arguments
+        ----------
+        print_progress : True, optional
+            whether or not progress should be printed to terminal
+        nonlinear : True, optional
+            whether or not the tangents of the stiffness matrix should be modified throughout the
+            post-processing
+
+        Notes
+        -------------
+        The resulting output from the `results` object (instance of `Results` class) is stored in `results.output['stab_eigs']`.
+
+        '''
+        
         self.output = dict()
         for key in self.element_results:
             self.output[key] = np.zeros([len(self.analysis.eldef.elements), len(self.analysis.t)])

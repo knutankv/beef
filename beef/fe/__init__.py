@@ -1,3 +1,31 @@
+'''
+Finite Element (FE) library
+========================
+This module consists of all classes to create and run FE analyses. 
+
+The following convention is used throughout to stack DOFs from multiple nodes:
+$$
+\\begin{Bmatrix}
+\{u_{1}\}\\\\
+\{u_{2}\}\\\\
+\\vdots \\\\
+\{u_{n}\} \\\\
+\\vdots \\\\  
+\{u_{N}\}
+\\end{Bmatrix}
+$$
+
+where the translational DOFs (subscript t) and rotational DOFs (subscript r) 
+from node i are stacked as follows:
+
+$$
+\\begin{Bmatrix}
+\{u_{t}\}\\\\
+\{u_{r}\}
+\\end{Bmatrix}
+$$
+'''
+
 # External functions
 import numpy as np
 from scipy.linalg import null_space, eig

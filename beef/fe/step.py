@@ -1,8 +1,21 @@
-import numpy as np
+'''
+FE objects submodule: step definition (**NOT USED CURRENTLY**)
+'''
 
-## NOT USED IN CURRENT VERSION - MIGHT BE INCLUDED IN FUTURE. NOW ANALYSES ARE SINGLE-STEP ONLY.
-#%% Step class definitions
+import numpy as np
 class Step:
+    '''
+    Step class. (**NOT USED CURRENTLY**)
+
+    Arguments
+    ------------
+    step_type : {'eigenvalue', 'dynamic', 'static'}
+        string describing step type
+    initial_state_from : None, optional
+        name of step to base analysis on - this would be defined as initial state of the current step
+    forces : Force obj
+        list of force objects relevant in step
+    '''
     def __init__(self, step_type, initial_state_from=None, forces=None):
         self.type = step_type    
         self.forces = forces
@@ -20,11 +33,28 @@ class Step:
 
 
     def prepare(self):
+        '''
+        Prepare step (not finalized)
+        '''
         if self.forces is not None:
             self.global_forces = self.analysis.global_forces(self)
 
 
     def adjust_response_final(self, r_in, as_type=float):
+        '''
+        Adjust format of response to constrained.
+
+        Arguments
+        -----------
+        r_in : float
+        as_type : type
+            float type is default
+
+        Returns
+        ----------
+        r_out : float
+            numpy array describing adjusted response (in constrained format)
+        '''
         if self.analysis.eldef.constraint_type == 'primal':
             r_out = self.analysis.eldef.L @ r_in
                 
@@ -34,13 +64,38 @@ class Step:
         return r_out
     
 class EigenvalueStep(Step):
+    '''
+    Eigenvalue step class.
+
+    Arguments
+    -------------
+    initial_state_from : None, optional
+        name of step to base analysis on - this would be defined as initial state of the current step    
+    n_modes : None
+        number of modes to solve - if None is input, all modes are solved
+    keep_constraint_modes : False
+        whether or not to keep constraint modes (Lagrange constraints)
+    normalize : True
+        whether or not to normalize modes prior to output
+    '''
     def __init__(self, initial_state_from=None, n_modes=None, keep_constraint_modes=False, normalize=True):
-        super().__init__('eigenvalue problem', initial_state_from=initial_state_from)
+        super().__init__('eigenvalue', initial_state_from=initial_state_from)
         self.n_modes = n_modes
         self.keep_constraint_modes = keep_constraint_modes
         self.normalize = normalize
         
     def solve(self, analysis):
+        '''
+        Run solution of eigenvalue step.
+
+        Arguments
+        ------------
+        analysis 
+            **SHOULD BE THE OTHER WAY AROUND - STEPS ARE NESTED IN LIST OF ANALYSIS***
+            then solution methods should be part of analysis object, and the specified steps are chosen as input (all standard)
+
+
+        '''
         mats = analysis.eldef.global_matrices
         
         if self.n_modes is None:
@@ -66,6 +121,18 @@ class StaticStep(Step):
         super().__init__('static', **kwargs)
 
     def solve(self, analysis):
+
+        '''
+        Run solution of static step.
+
+        Arguments
+        ------------
+        analysis 
+            **SHOULD BE THE OTHER WAY AROUND - STEPS ARE NESTED IN LIST OF ANALYSIS***
+            then solution methods should be part of analysis object, and the specified steps are chosen as input (all standard)
+
+        '''
+        
         K = analysis.eldef.global_matrices['K']
         u = (np.linalg.inv(K) @ self.global_forces) 
         self.results['u'] = self.adjust_response_final(u) 

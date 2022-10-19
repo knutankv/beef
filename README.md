@@ -51,11 +51,20 @@ Examples
 =======================
 Examples are provided as Jupyter Notebooks in the [examples folder](https://github.com/knutankv/beef/tree/master/examples).
 
+References
+=======================
+<a id="1">[1]</a> 
+S. Krenk, Non-linear modeling and analysis of solids and structures. Cambridge University Press, 2009.
+
+<a id="2">[2]</a>
+W. Fang, EN234: Three-dimentional Timoshenko beam element undergoing axial, torsional and bending deformations, 2015.
+
+<a id="3">[3]</a>
+H. Karadeniz, M. P. Saka, and V. Togan, “Finite Element Analysis of Space Frame Structures BT  - Stochastic Analysis of Offshore Steel Structures: An Analytical Appraisal,” H. Karadeniz, Ed. London: Springer London, 2013, pp. 1–119. https://link.springer.com/content/pdf/10.1007%2F978-1-84996-190-5_1
 
 Citation
 =======================
 ZENODO citation element will be created.
-
 
 Support
 =======================

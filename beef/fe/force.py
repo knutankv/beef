@@ -1,8 +1,36 @@
+'''
+FE objects submodule: force definitions
+'''
+
 from scipy.interpolate import interp1d
 import numpy as np
 
-#%% Load class definition 
 class Force:
+    '''
+    Force definition class. 
+
+    Arguments
+    -------------
+    node_labels : int
+        list of node labels to excite
+    dofs : int
+        list/array of local DOFs to excite
+    amplitudes : float
+        array defining amplitudes; shape should be either n_nodelabels x n_samples (length of time axis) or n_samples x 1 in dimensions - if latter
+        the same force is assumed for all node labels
+    name : 'Force-0', optional
+        name of force object
+    plotcolor : 'DarkOrange', optional
+        color used for plotting of analysis with force definitions
+    t : None, optional
+        time axis corresponding to input force history (n_samples)
+
+    Notes 
+    ------
+    Generates interpolant object that can be evaluated at time instance to generate force vector in global format, i.e., `self.evaluate`
+
+    '''
+
     def __init__(self, node_labels, dofs, amplitudes, name='Force-0', plotcolor='DarkOrange', t=None):
         self.plotcolor = plotcolor
         self.name = name
@@ -38,6 +66,9 @@ class Force:
 
     @staticmethod
     def adjust_dof_ix(dix, n_nodes):
+        '''
+        Adjust DOF index format.
+        '''
         if np.array(dix).ndim != 2:
             if np.array(dix).ndim == 0:
                 dix = [[dix]]*n_nodes
@@ -48,6 +79,23 @@ class Force:
 
     @staticmethod
     def adjust_amplitudes(amplitudes, n_nodes):
+        '''
+        Adjust amplitudes array to match the number of nodes.
+
+        Arguments
+        -------------
+        amplitudes : float 
+            array defining amplitudes; shape should be either n_nodelabels x n_samples (length of time axis) or 
+            n_samples x 1 in dimensions - if latter the same force is assumed for all node labels
+        n_nodes : int
+            number of nodes
+
+        Returns
+        -------------
+        amplitudes : float
+            adjusted array defining amplitudes, corrected to match the required format to generate the force interpolant callable with `Force.evaluate`.
+
+        '''
 
         if type(amplitudes) is list:
             amplitudes = np.array(amplitudes)

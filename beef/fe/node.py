@@ -1,9 +1,29 @@
+'''
+FE objects submodule: nodes
+'''
+
 import functools
 import numpy as np
 
 @functools.total_ordering
 
 class Node:
+    '''
+    Node core class. Basic functionality (common for all children objects)
+    will inherit these methods.
+
+    Arguments
+    ---------
+    label : int
+        label of node object
+    coordinates : float
+        coordinates (2d or 3d) of node
+    ndofs : int, optional
+        number of DOFs, noramlly defined later (after stacked in `ElDef`)
+    global_dofs : int, optional
+        global DOFs, normally defined later (after stacked in `ElDef`.
+    '''
+
     def __init__(self, label, coordinates, ndofs=None, global_dofs=None):
         self.label = int(label)
         self.coordinates = np.array(coordinates)

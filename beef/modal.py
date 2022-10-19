@@ -1,6 +1,28 @@
+'''
+Modal calculations.
+'''
+
 import numpy as np
 
 def statespace(K, C, M):
+    '''
+    Establish state matrix based on stiffness, damping and mass matrices.
+
+    Arguments
+    ----------
+    K : float
+        global stiffness matrix (numpy array)
+    C : float
+        global damping matrix (numpy array)
+    M : float
+        global mass matrix (numpy array)
+
+    Returns
+    --------
+    A : float
+        state matrix
+    '''
+
     ndofs = np.shape(K)[0]
     A = np.zeros([2*ndofs, 2*ndofs])
     A[0:ndofs, ndofs:2*ndofs] = np.eye(ndofs)
@@ -10,6 +32,28 @@ def statespace(K, C, M):
     return A
 
 def normalize_phi(phi, include_dofs=[0,1,2,3,4,5], n_dofs=6, return_scaling=False):
+    '''
+    Normalize input phi matrix (modal transformation with modes stacked as columns).
+
+    Arguments
+    ----------
+    phi : float
+        modal transformation matrix with modes stacked column-wise
+    include_dofs : [0,1,2,3,4,5], optional
+        list of DOF integer indices to include in normalization
+    n_dofs : 6, optional
+        integer number of DOFs per node
+    return_scaling : False, optional
+        whether or not to return a second variable with the applied scalings
+
+    Returns
+    --------
+    phi : float
+        modal transformation matrix with modes stacked column-wise, 
+        where each mode is normalized to the largest component
+    mode_scaling : float
+        array of scaling factors applied (only returned if requested by passing `return_scaling=True`)
+    '''
     phi_n = phi*0
 
     phi_for_scaling = np.vstack([phi[dof::n_dofs, :] for dof in include_dofs])
