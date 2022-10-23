@@ -20,8 +20,8 @@ class Constraint:
         name of constraint
     dofs : 'all'
         either specify strings 'all', 'rot' or 'trans' or a list with dof indices (0 is first)
-    node_type : 'beam3d'
-        only 'beam3d' supported currently
+    node_type : {'beam2d', 'beam3d'}
+        type of nodes (defining number of DOFs per node)
     relative_to : 'global'
         only 'global' supported currently
 
