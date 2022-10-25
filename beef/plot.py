@@ -179,8 +179,19 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
 
     '''
     
-    # TODO: MAKE 2D compatible
+    # Establish function to convert 2d coordinates to 3d for plotting 2d-domained elements
+    if elements[0].domain == '2d':
+        def conv_fun(xyz):
+            if len(xyz)==2:
+                return np.hstack([xyz, 0])
+            elif len(xyz)==3:
+                return np.hstack([xyz[:2], 0, 0, xyz[2], 0])
+            else:
+                raise ValueError('Wrong size of xyz')
+    else:
+        conv_fun = lambda xyz: xyz
     
+    # Settings
     el_settings = dict(color='#008800')
     el_settings.update(**element_settings)
 
@@ -269,13 +280,13 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
 
     # Node coordinates
     nodes = list(set([a for b in [el.nodes for el in elements] for a in b])) #flat list of unique nodes
-    node_pos = np.vstack([node.coordinates for node in nodes])
+    node_pos = np.vstack([conv_fun(node.coordinates) for node in nodes])
    
     # Establish element lines
     if len(unsel_elements)>0:
         element_lines = [None]*len(unsel_elements)
         for ix, el in enumerate(unsel_elements):
-            element_lines[ix] = np.vstack([node.coordinates for node in el.nodes])
+            element_lines[ix] = np.vstack([conv_fun(node.coordinates) for node in el.nodes])
 
         element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **el_settings)
         view.add(element_visual)
@@ -284,7 +295,7 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     if len(sel_elements)>0:
         element_lines = [None]*len(sel_elements)
         for ix, el in enumerate(sel_elements):
-            element_lines[ix] = np.vstack([node.coordinates for node in el.nodes])
+            element_lines[ix] = np.vstack([conv_fun(node.coordinates) for node in el.nodes])
 
         element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **elsel_settings)
         view.add(element_visual)
@@ -293,14 +304,14 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     if overlay_deformed:
         element_lines = [None]*len(elements)
         for ix, el in enumerate(elements):
-            element_lines[ix] = np.vstack([node.x[:3] for node in el.nodes])
+            element_lines[ix] = np.vstack([conv_fun(node.x)[:3] for node in el.nodes])
 
         element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **def_el_settings)
         view.add(element_visual)
 
     # Establish element labels
     if element_labels and len(unsel_elements)>0:
-        el_cog = [el.get_cog() for el in unsel_elements]
+        el_cog = [conv_fun(el.get_cog()) for el in unsel_elements]
         el_labels = [str(el.label) for el in unsel_elements]
 
         element_label_visual = scene.Text(text=el_labels,  pos=el_cog, **ellab_settings)
@@ -331,7 +342,7 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         sel_node_labels = [str(node.label) for node in sel_nodes]        
 
         if len(sel_nodes) >= 1:
-            node_pos = np.vstack([node.coordinates for node in sel_nodes])
+            node_pos = np.vstack([conv_fun(node.coordinates) for node in sel_nodes])
             sel_node_label_visual = scene.Text(text=sel_node_labels,  pos=node_pos, **nsellab_settings)
             sel_node_visual = scene.visuals.Markers(pos=node_pos, **nsel_settings)
 
@@ -343,8 +354,8 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     # Add transformation matrices
     if plot_tmat_ax is not None:
         for ax in plot_tmat_ax:
-            el_vecs = np.vstack([element.tmat[ax, 0:3] for element in elements])*tmat_scaling
-            el_cogs = np.vstack([element.get_cog() for element in elements])
+            el_vecs = np.vstack([conv_fun(element.tmat[ax, :])[0:3] for element in elements])*tmat_scaling
+            el_cogs = np.vstack([conv_fun(element.get_cog()) for element in elements])
             
             # INTERTWINE TMAT AND ELCOGS
             arrow_data = np.hstack([el_cogs, el_cogs+el_vecs])
