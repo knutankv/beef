@@ -91,7 +91,7 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
                   tmat_scaling=1, plot_tmat_ax=None, plot_nodes=False, node_labels=False, element_labels=False, element_label_settings={}, node_label_settings={}, 
                   element_settings={}, node_settings={}, sel_node_settings={}, sel_element_settings={}, sel_node_label_settings={}, sel_element_label_settings={}, 
                   tmat_settings={}, deformed_element_settings={}, title='BEEF Element plot', domain='3d',
-                  element_colors=None, colormap_range=None, colormap_name='viridis', colorbar_limit_format=':.2e'):   
+                  element_colors=None, colormap_range=None, colormap_name='viridis', colorbar_limit_format=':.2e', highlight=[]):   
 
     '''
     Plot beam/bar elements.
@@ -166,6 +166,8 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         name of colormap ('viridis' is standard)
     colorbar_limit_format : str, optional
         format used to create colorbar (':.2e' is standard)
+    highglight : str, optional
+        list of special values to highlight ('max' and 'min' supported currently)
 
 
     Returns
@@ -237,21 +239,30 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     if sel_elements is None:
         sel_elements = []
 
-    sel_ix = np.array([el.label in sel_elements for el in elements])
-    unsel_elements = [el for el in elements if el.label not in sel_elements]
     sel_elements = [el for el in elements if el.label in sel_elements]
+    
+    if element_colors is not None:
+        element_values = element_colors*1
+
+        if 'max' in highlight:
+            sel_elements.append(elements[np.nanargmax(element_colors)])
+        if 'min' in highlight:
+            sel_elements.append(elements[np.nanargmin(element_colors)])
+
+    unsel_elements = [el for el in elements if el not in sel_elements]
+    sel_ix = np.array([el in sel_elements for el in elements])
 
     # Element colormap
     cm = get_colormaps()[colormap_name]
 
     if element_colors is not None:
-        element_values = element_colors*1
         element_colors = np.array(element_colors)
         nan_ix = np.isnan(element_colors)
-        
-        if colormap_range is not None:
-            element_colors = (np.array(element_colors) - colormap_range[0])/(colormap_range[1] - colormap_range[0])
 
+        if colormap_range is None:
+            colormap_range = [np.nanmin(element_values), np.nanmax(element_values)]
+        
+        element_colors = (np.array(element_colors) - colormap_range[0])/(colormap_range[1] - colormap_range[0])
         element_colors = cm[np.array(np.repeat(element_colors, 2, axis=0))].rgba
         
         nan_ix = np.isnan(element_colors[:,0])
@@ -318,9 +329,11 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         view.add(element_label_visual)
    
     if len(sel_elements)>0:
-  
         el_cog = [el.get_cog() for el in sel_elements]
-        el_labels = [f'{el.label} ({element_values[sel_ix][ix]:.3f})' for ix,el in enumerate(sel_elements)]
+        if element_colors is not None:
+            el_labels = [f'{el.label} ({element_values[sel_ix][ix]:.3f})' for ix,el in enumerate(sel_elements)]
+        else:
+            el_labels = [el.label for el in sel_elements]
         
         element_label_visual = scene.Text(text=el_labels,  pos=el_cog, **elsellab_settings)
         view.add(element_label_visual)       
