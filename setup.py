@@ -1,7 +1,15 @@
 import setuptools
 
-with open("README.md", "r") as fh:
-    long_description = fh.read()
+long_description = '''
+BEEF is a BEam Elements Framework package for Python. The main features are:
+
+* 2D and 3D beam finite element analyses
+* Solves static and dynamic problems
+* Linear and co-rotated formulations, allowing for large-displacement problems (only 2D currently, 3D is work in progress)
+* Newmark, Alpha-HHT, static solvers, eigenvalue solution, eigenbuckling solution
+* Postprocessing tools for visualization
+* Custom function inputs for post-processing
+'''
 
 setuptools.setup(
     name="beef-knutankv",
