@@ -5,6 +5,7 @@ FE objects submodule: elements
 from ..fe.section import Section
 import numpy as np
 from ..general import transform_unit, blkdiag
+from copy import deepcopy
 
 class BeamElement:
     '''
@@ -197,6 +198,37 @@ class BeamElement:
     @property
     def ndofs(self):
         return self.nodes[0].ndofs + self.nodes[1].ndofs
+
+    def subdivide(self, n):
+        '''
+        Divide element into n elements.
+
+        Arguments
+        -----------
+        n : int
+            number of divisions/resulting elements
+            
+        Returns
+        -------------
+        elements : obj
+            list of new element objects
+            
+        '''
+        
+        elements = [None]*n
+        x0 = self.nodes[0].coordinates
+        x1 = self.nodes[1].coordinates
+        v = x1-x0
+        
+        for el in range(n):
+            elements[el] = deepcopy(self)
+            elements[el].nodes[0].coordinates = x0+v*1/n*el
+            elements[el].nodes[1].coordinates = x0+v*1/n*(el+1)
+            
+            elements[el].initiate_nodes()
+        
+        return elements
+    
 
 class BeamElement2d(BeamElement):
     '''
