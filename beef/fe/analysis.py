@@ -7,7 +7,7 @@ import numpy as np
 from beef import gdof_from_nodedof, compatibility_matrix, B_to_dofpairs, dof_pairs_to_Linv, lagrange_constrain, convert_dofs, convert_dofs_list, ensure_list, gdof_ix_from_nodelabels, basic_coupled, blkdiag
 from scipy.linalg import block_diag, null_space as null, solve
 from beef import newmark 
-from beef.modal import normalize_phi, statespace
+from beef.modal import normalize_phi, statespace, maxreal
 from beef.newmark import is_converged, factors_from_alpha
 import sys
 
@@ -408,7 +408,8 @@ class Analysis:
         
     def run_eig(self, return_full=False, return_complex=False, normalize_modes=True):
         '''
-        Run dynamic (state space) eigenvalue analysis, using parameters and element definition specified in parent Analysis object.
+        Run dynamic (state space) eigenvalue analysis, using parameters and 
+        element definition specified in parent Analysis object.
 
         Arguments
         --------------
@@ -433,10 +434,12 @@ class Analysis:
 
         A = statespace(K, C, M)
         lambd, phi = np.linalg.eig(A)
-
+        
         if normalize_modes:
-            phi = normalize_phi(phi)
- 
+            n_dofs = 6 if self.eldef.domain == '3d' else 3
+            include_dofs = [0,1,2] if self.eldef.domain == '3d' else [0,1]
+            phi = normalize_phi(phi, include_dofs=include_dofs, n_dofs=n_dofs)
+
         if return_full:
             return lambd, phi
         else:
@@ -444,12 +447,14 @@ class Analysis:
             n_dofs = M.shape[0]
             phi = self.eldef.L @ phi[:n_dofs, ix]
             lambd = lambd[ix]
-            if normalize_modes:
-                phi = normalize_phi(phi)
+            
+                
             if ~return_complex:
+                phi = maxreal(phi)
                 phi = np.real(phi)
-           
+
         return lambd, phi
+    
 
     def run_static(self, print_progress=True, return_results=False):
         '''

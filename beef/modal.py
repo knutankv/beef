@@ -69,3 +69,34 @@ def normalize_phi(phi, include_dofs=[0,1,2,3,4,5], n_dofs=6, return_scaling=Fals
         return phi_n, mode_scaling
     else:
         return phi_n
+
+
+def maxreal(phi):
+    """
+    Rotate complex vectors (stacked column-wise) such that the absolute values of the real parts are maximized.
+
+    Arguments
+    ---------------------------
+    phi : double
+        complex-valued modal transformation matrix (column-wise stacked mode shapes)
+
+    Returns
+    ---------------------------
+    phi_max_real : boolean
+        complex-valued modal transformation matrix, with vectors rotated to have maximum real parts
+    """   
+
+    angles = np.expand_dims(np.arange(0,np.pi/2, 0.01), axis=0)
+    
+    if phi.ndim==1:
+        phi = np.array([phi]).T
+
+    phi_max_real = np.zeros(np.shape(phi)).astype('complex')        
+
+    for mode in range(np.shape(phi)[1]):
+        rot_mode = np.dot(np.expand_dims(phi[:, mode], axis=1), np.exp(angles*1j))
+        max_angle_ix = np.argmax(np.sum(np.real(rot_mode)**2, axis=0), axis=0)
+
+        phi_max_real[:, mode] = phi[:, mode] * np.exp(angles[0, max_angle_ix]*1j)*np.sign(sum(np.real(phi[:, mode])))
+  
+    return phi_max_real

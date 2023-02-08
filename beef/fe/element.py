@@ -244,7 +244,7 @@ class BeamElement2d(BeamElement):
         section object to define element (standard value is standard initialized Section object)
     shear_flexible : False, optional
         whether or not to include shear flexibility
-    mass_formulation : {'timoshenko', 'euler', 'lumped'}
+    mass_formulation : {'euler', 'timoshenko', 'lumped'}
         what mass formulation to apply (refers to shape functions used)
     nonlinear : True, optional
         whether or not to use nonlinear internal functions for element
@@ -252,7 +252,7 @@ class BeamElement2d(BeamElement):
         applied axial force (for linearized geometric stiffness calculation)
     '''
     def __init__(self, nodes, label, section=Section(), shear_flexible=False, 
-                 mass_formulation='timoshenko', nonlinear=True, N0=None):
+                 mass_formulation='euler', nonlinear=True, N0=None):
         self.nodes = nodes
         self.label = int(label)
         self.section = section
