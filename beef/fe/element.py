@@ -961,6 +961,136 @@ class BeamElement3d(BeamElement):
         else:
             return self.e2
     
+    # -------------- COROTATIONAL FORMULATION --------------
+    def update_nonlinear(self):
+        '''
+        Update element forces from nonlinear stiffness assumption.
+        '''
+        self.update_geometry()              # update all node positions and element geometry     
+        self.update_corot()                 # --> new internal forces (corotational)
+        self.update_k()                     # --> new tangent stiffness
+
+    def update_v(self):
+        '''
+        Update deformation modes of element.
+
+        Notes 
+        ----------
+        {v} describes the deformation modes of the element, which are given by:
+            
+        1. Elongation of element
+        2. Angle of symmetric deformation mode
+        3. Angle of the anti-symmetric deformation mode
+
+        For more information, refer to Chapter 5 of [[1]](../#1).
+
+        '''
+        el_angle = self.get_element_angle()
+
+        self.v[0] = self.L - self.L0
+        self.v[1] = self.nodes[1].x[2] - self.nodes[0].x[2]
+
+        phi_a = self.nodes[0].x[2] + self.nodes[1].x[2] - 2*(el_angle - self.phi0)  #asymmetric bending
+        self.v[2] = ((phi_a + np.pi) % (2*np.pi)) - np.pi # % is the modulus operator, this ensures 0<phi_a<2pi
+
+    def update_corot(self):
+        '''
+        Update all corotational parameters of element based on current state.
+
+        Conducts the following steps:
+
+        * Update the deformation modes \(\{v\}\): `BeamElement3d.update_v`
+        * Set internal forces from deformation modes \(\{t\} = [K_d] \{v\}\)
+        * Assign values for moment M, axial force N and shear force V from internal force \(\{v\})\)
+        **TODO: consider simply define as dynamic properties**
+        * Calculate internal forces in global format with \(\{q\} = [T]^T [S] [T]\)
+        
+        '''
+        self.update_v()        # compute displacement mode
+        self.t = self.get_Kd_c() @ self.v              # new internal forces (element forces) based on the two above  
+
+        self.N = self.t[0]                  # update internal force N from t
+        self.M = self.t[1]
+        self.Q = -2*self.t[2]/self.L        # update internal force Q from t   
+        
+        self.q = self.tmat.T @ self.get_S() @ self.t  # calculate internal forces in global format
+    
+    def get_S(self):
+        '''
+        Get matrix transforming from reduced (deformation modes) to full format.
+
+        Returns
+        ---------
+        S : float
+            6x3 numpy array describing S
+
+        Notes
+        ---------
+        \([S]\) is described in Eq. 5.13 of [[1]](../#1)
+        '''
+        return np.array([[-1,0,0], 
+                         [0,0,2/self.L], 
+                         [0,-1,1], 
+                         [1,0,0], 
+                         [0,0,-2/self.L], 
+                         [0, 1, 1]])    
+
+    def get_Kd_c(self):
+        '''
+        Get constitutive part of stiffness matrix for deformation modes.
+
+        Returns
+        --------
+        Kd_c : float
+            12x12 numpy array describing constitutive part of stiffness matrix for the deformation modes
+
+        Notes
+        ---------
+        See Eq. 5.112--5.115 in [[1]](../#1).
+
+        '''
+
+        # Establish copies of element properties
+        E = self.section.E
+        A = self.section.A
+        G = self.section.G
+        J = self.section.J
+        Iy, Iz = self.section.I
+        L = self.L
+
+        psi = self.get_psi(return_phi=False)
+        psi_y = psi[0]
+        psi_z = psi[1]
+
+        K11 = K33 = 1/L**3 * np.array([[E*A*L**2, 0, 0], [0, 12*psi_z*E*Iz, 0], [0,0,12*psi_y*E*Iy]])
+        K13 = K31 = -K11
+
+        K22 = K44 = 1/L * np.array([[G*J, 0, 0], [0, (3*psi_y+1)*E*Iy, 0], [0,0,(3*psi_z+1)*E*Iz]])
+        K24 = K42 = 1/L * np.array([[-G*J, 0, 0], [0, (3*psi_y-1)*E*Iy, 0], [0,0,(3*psi_z-1)*E*Iz]])
+
+        K12 = K14 = K23 = K43 = 6/L**2 * np.array([[0,0,0], [0,0, psi_z*E*Iz], [0, -psi_y*E*Iy,0]])
+        K21 = K41 = K32 = K34 = -K12
+
+        Kd_c = np.stack([[K11, K12, K13, K14], [K21, K22, K23, K24], [K31, K32, K33, K34], [K41, K42, K43, K44]])
+        
+        return Kd_c
+
+
+    def get_Kd_g(self):
+        '''
+        Get geometric part of stiffness matrix for deformation modes.
+
+        Returns
+        -----------
+        k_dg : float
+            12x12 numpy array (matrix) describing the geometric stiffness related to the six deformation modes given by v
+
+        Notes
+        -----------
+        \(k_{d,g}\) is given in Eq. *** in [[1]](../#1).
+        '''
+        return self.L*self.N*np.array([[0,0,0], [0,1/12,0], [0,0, 1/20]])
+
     # ------------- FE CORE -------------------------------
     def local_k_linear(self):
         '''
@@ -1018,6 +1148,7 @@ class BeamElement3d(BeamElement):
             [0, 0, 0, G*J/L, 0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, -6*mu_y*E*I_y/L**2, 0, (4+phi_y)*mu_y*E*I_y/L, 0, 0, 0, 0, 0, 0, 0],
             [0, 6*mu_z*E*I_z/L**2, 0, 0, 0, (4+phi_z)*mu_z*E*I_z/L, 0, 0, 0, 0, 0, 0],
+
             [-k_axial, 0, 0, 0, 0, 0, k_axial, 0, 0, 0, 0, 0],
             [0, -12*mu_z*E*I_z/L**3, 0, 0, 0, -6*mu_z*E*I_z/L**2, 0, 12*mu_z*E*I_z/L**3, 0, 0, 0, 0],
             [0, 0, -12*mu_y*E*I_y/L**3, 0, 6*mu_y*E*I_y/L**2, 0, 0, 0, 12*mu_y*E*I_y/L**3, 0, 0, 0],
@@ -1028,7 +1159,8 @@ class BeamElement3d(BeamElement):
         
         ke = ke + ke.T - np.diag(np.diag(ke))   #copy symmetric parts (& avoid doubling diagonal)
         return ke        
-   
+
+
     def local_m_lumped(self):
         '''
         Local mass matrix of element based on lumped formulation.
