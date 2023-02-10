@@ -380,7 +380,7 @@ class ElDef:
 
         els = []
         for element in self.elements:
-            nodes_in_use = [node_label for node_label in element.get_nodelabels() if node_label in node_labels]
+            nodes_in_use = [node_label for node_label in element.nodes if node_label in node_labels]
             if len(nodes_in_use)>0:
                 els.append(element)
         

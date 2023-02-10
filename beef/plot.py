@@ -11,6 +11,9 @@ from vispy.color import Colormap
 from vispy.color import get_colormaps
 from vispy.util.quaternion import Quaternion
 
+def flat(l):
+  return [y for x in l for y in x]
+
 def rm_visuals(view):
     '''
     Remove visuals from vispy-generated view.
@@ -91,7 +94,7 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
                   tmat_scaling=1, plot_tmat_ax=None, plot_nodes=False, node_labels=False, element_labels=False, element_label_settings={}, node_label_settings={}, 
                   element_settings={}, node_settings={}, sel_node_settings={}, sel_element_settings={}, sel_node_label_settings={}, sel_element_label_settings={}, 
                   tmat_settings={}, deformed_element_settings={}, title='BEEF Element plot', domain='3d',
-                  element_colors=None, colormap_range=None, colormap_name='viridis', colorbar_limit_format=':.2e', highlight=[]):   
+                  element_values=None, colormap_range=None, colormap_name='viridis', sel_val_format=':.2e', colorbar_limit_format=':.2e', highlight=[]):   
 
     '''
     Plot beam/bar elements.
@@ -157,15 +160,17 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         name of plot; 'BEEF Element plot' is standard
     domain : {'3d', '2d'}
         specification of dimensionality of plot (**only 3d plots are currently supported**)
-    element_colors : float, optional    
-        colors / values to plot elements with, used to show contour plots; length should match the 
-        number of elements
+    element_values : float, optional    
+        values to plot elements with, used to show contour plots; length should match the 
+        number of elements (if more values per entry in list --> assumed gradients on line)
     colormap_range : float, optional
         list of min and max values of colormap (standard value None activates autoscaling to max and min values)
     colormap_name : str, optional 
         name of colormap ('viridis' is standard)
     colorbar_limit_format : str, optional
         format used to create colorbar (':.2e' is standard)
+    sel_val_format : str, optional
+        format used to create values in texts of selected elements (':.2e' is standard)
     highglight : str, optional
         list of special values to highlight ('max' and 'min' supported currently)
 
@@ -194,13 +199,15 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         conv_fun = lambda xyz: xyz
     
     # Settings
+    invalid_color = np.array([0.8,0.8,0.8,0.2])
+    
     el_settings = dict(color='#008800')
     el_settings.update(**element_settings)
 
     def_el_settings = dict(color='#ff2288')
     def_el_settings.update(**deformed_element_settings)
 
-    elsel_settings = dict(color='#ff0055',width=3)
+    elsel_settings = dict(color='#ff0055',width=7)
     elsel_settings.update(**sel_element_settings)
 
     elsellab_settings = dict(color='#ff0055', bold=True, italic=False, face='OpenSans', font_size=10, anchor_x='left')
@@ -209,13 +216,13 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     ellab_settings = dict(color='#008800', bold=False, italic=False, face='OpenSans', font_size=10, anchor_x='left')
     ellab_settings.update(**element_label_settings)
  
-    n_settings = dict(face_color='#0000ff', edge_color=None, size=4)
+    n_settings = dict(face_color='#0000ff', edge_color=None, size=6)
     n_settings.update(**node_settings)
 
     nlab_settings = dict(color='#0000ff', bold=False, italic=False, face='OpenSans', font_size=10, anchor_x='left')
     nlab_settings.update(**node_label_settings)
 
-    nsel_settings = dict(face_color='#ff0000', edge_color='#ff0000', size=8)
+    nsel_settings = dict(face_color='#ff0000', edge_color='#ff0000', size=6)
     nsel_settings.update(**sel_node_settings)
 
     nsellab_settings = dict(color='#ff0000', bold=True, italic=False, face='OpenSans', font_size=10, anchor_x='left')
@@ -224,6 +231,8 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     tmat_colors = ['#0000ff', '#00ff00', '#ff0000']
     tmatax_settings = dict(arrow_size=1)
     tmatax_settings.update(**tmat_settings)
+    
+    elements_org = deepcopy(elements)
 
     # Establish view and canvas    
     if view is None:
@@ -240,39 +249,77 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         sel_elements = []
 
     sel_elements = [el for el in elements if el.label in sel_elements]
+   
+    # Create lists of selected (and non-selected) els
+    unsel_elements_org = [el for el in elements if el not in sel_elements]
+    sel_ix_org = np.array([el in sel_elements for el in elements])
+
+    # Reorder selected
+    sel_elements_org = [elements[i] for i in np.where(sel_ix_org)[0]]
+
     
-    if element_colors is not None:
-        element_values = element_colors*1
-
+    # Initial treatment of element values / colors
+    colorvals_per_element = 1
+    
+    if element_values is not None:
+        if (np.ndim(element_values)==1) or (np.shape(element_values)[1] == 1):
+            element_values = [[ev, ev] for ev in element_values]
+        
+        colorvals_per_element = np.shape(element_values)[1]
+        
+        max_values = [np.nanmax(elvals) for elvals in element_values]
+        min_values = [np.nanmin(elvals) for elvals in element_values]
+        
         if 'max' in highlight:
-            sel_elements.append(elements[np.nanargmax(element_colors)])
+            sel_elements.append(elements[np.nanargmax(max_values)])
         if 'min' in highlight:
-            sel_elements.append(elements[np.nanargmin(element_colors)])
-
-    unsel_elements = [el for el in elements if el not in sel_elements]
-    sel_ix = np.array([el in sel_elements for el in elements])
+            sel_elements.append(elements[np.nanargmin(min_values)])
 
     # Element colormap
     cm = get_colormaps()[colormap_name]
 
-    if element_colors is not None:
-        element_colors = np.array(element_colors)
-        nan_ix = np.isnan(element_colors)
+    if colorvals_per_element > 2:   #further divide to accomodate within along element
+        elements = flat([el.subdivide(colorvals_per_element-1) for el in elements])
+        
+    # Create lists of selected (and non-selected) els
+    unsel_elements = [el for el in elements if el not in sel_elements]
+    sel_ix = np.array([el in sel_elements for el in elements])
 
+    # Reorder selected
+    sel_elements = [elements[i] for i in np.where(sel_ix)[0]]
+
+    # Establish color ranges, color specs, and so on
+    if element_values is not None:
         if colormap_range is None:
-            colormap_range = [np.nanmin(element_values), np.nanmax(element_values)]
+            colormap_range = [np.nanmin(min_values), np.nanmax(max_values)]
         
-        element_colors = (np.array(element_colors) - colormap_range[0])/(colormap_range[1] - colormap_range[0])
-        element_colors = cm[np.array(np.repeat(element_colors, 2, axis=0))].rgba
+        # Establish element colors and rearrange values
+        element_values_extended = []
+        for elvals in element_values:
+            ev_flat = elvals.flatten()
+            ev_flat = np.hstack([ev_flat[0], 
+                                 np.repeat(ev_flat[1:-1], 2, axis=0), 
+                                 ev_flat[-1]])
+            
+            element_values_extended.append(np.reshape(ev_flat, [-1, 2]))
         
-        nan_ix = np.isnan(element_colors[:,0])
-        if any(nan_ix):
-            element_colors[nan_ix, :] = 0
-            element_colors[nan_ix, -1] = 0.1
+        element_values = np.vstack(element_values_extended)
+        element_values_normalized = [(np.array(ev) - colormap_range[0])/(colormap_range[1] - colormap_range[0]) for ev in element_values]
 
-        el_settings['color'] = element_colors[np.repeat(~sel_ix, 2, axis=0),:]
-        elsel_settings['color'] = element_colors[np.repeat(sel_ix, 2, axis=0),:]
-
+        element_colors = [cm[ev].rgba for ev in element_values_normalized]
+        element_colors = np.vstack(element_colors)
+        
+        for ix, vals in enumerate(element_colors):
+            if np.any(np.isnan(vals)):
+                element_colors[ix, :] = invalid_color
+                
+        # Establish updated indexing (selected/not selected)
+        sel_ix_colors = np.repeat(sel_ix, 2, axis=0)
+ 
+        # Assign colors
+        elsel_settings['color'] = element_colors[sel_ix_colors, :]
+        el_settings['color'] = element_colors[~sel_ix_colors, :]
+        
         grid = canvas.central_widget.add_grid()
         cam_cb = scene.TurntableCamera(distance=1.3, fov=0, azimuth=180, roll=0, elevation=90, center= (3.8, 5, 0), interactive=True)
         
@@ -280,7 +327,7 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         view_cb = grid.add_view(row=0, col=4, camera=cam_cb, col_span=1) 
         
         cb = scene.ColorBarWidget(clim=colormap_range, cmap=cm, orientation="right",
-                                            border_width=1, padding=[0,0], axis_ratio=0.08)
+                                  border_width=1, padding=[0,0], axis_ratio=0.08)
         
         text_upper = scene.visuals.Text(text=('{lim1' + colorbar_limit_format + '}').format(lim1=colormap_range[0]), pos=(3.4,10,0), anchor_y='top')
         text_lower = scene.visuals.Text(text=('{lim1' + colorbar_limit_format + '}').format(lim1=colormap_range[1]), pos=(3.4,0,0), anchor_y='bottom')
@@ -288,9 +335,17 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         view_cb.add(cb)     
         view_cb.add(text_upper)    
         view_cb.add(text_lower)    
+        
+    else:
+        # Create lists of selected (and non-selected) els
+        unsel_elements = [el for el in elements if el not in sel_elements]
+        sel_ix = np.array([el in sel_elements for el in elements])
+        
+        # Reorder selected
+        sel_elements = [elements[i] for i in np.where(sel_ix)[0]]
 
     # Node coordinates
-    nodes = list(set([a for b in [el.nodes for el in elements] for a in b])) #flat list of unique nodes
+    nodes = list(set([a for b in [el.nodes for el in elements_org] for a in b])) #flat list of unique nodes
     node_pos = np.vstack([conv_fun(node.coordinates) for node in nodes])
    
     # Establish element lines
@@ -299,7 +354,9 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         for ix, el in enumerate(unsel_elements):
             element_lines[ix] = np.vstack([conv_fun(node.coordinates) for node in el.nodes])
 
-        element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **el_settings)
+        element_visual = scene.Line(pos=np.vstack(element_lines), 
+                                    connect='segments', 
+                                    **el_settings)
         view.add(element_visual)
  
     # Establish selected element lines
@@ -308,7 +365,9 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         for ix, el in enumerate(sel_elements):
             element_lines[ix] = np.vstack([conv_fun(node.coordinates) for node in el.nodes])
 
-        element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **elsel_settings)
+        element_visual = scene.Line(pos=np.vstack(element_lines), 
+                                    connect='segments', 
+                                    **elsel_settings)
         view.add(element_visual)
 
     # Overlay deformed plot if 
@@ -316,33 +375,56 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         element_lines = [None]*len(elements)
         for ix, el in enumerate(elements):
             element_lines[ix] = np.vstack([conv_fun(node.x)[:3] for node in el.nodes])
-
-        element_visual = scene.Line(pos=np.vstack(element_lines), connect='segments', **def_el_settings)
+        
+        element_visual = scene.Line(pos=np.vstack(element_lines), 
+                                    connect='segments', 
+                                    **def_el_settings)
         view.add(element_visual)
 
     # Establish element labels
     if element_labels and len(unsel_elements)>0:
-        el_cog = [conv_fun(el.get_cog()) for el in unsel_elements]
-        el_labels = [str(el.label) for el in unsel_elements]
+        el_cog = [conv_fun(el.get_cog()) for el in unsel_elements_org]
+        el_labels = [str(el.label) for el in unsel_elements_org]
 
-        element_label_visual = scene.Text(text=el_labels,  pos=el_cog, **ellab_settings)
+        element_label_visual = scene.Text(text=el_labels, pos=el_cog, **ellab_settings)
         view.add(element_label_visual)
    
     if len(sel_elements)>0:
-        el_cog = [el.get_cog() for el in sel_elements]
-        if element_colors is not None:
-            el_labels = [f'{el.label} ({element_values[sel_ix][ix]:.3f})' for ix,el in enumerate(sel_elements)]
+
+        if element_values is not None:
+            sel_values = element_values[sel_ix]
+            sel_element_labels = np.unique([el.label for el in sel_elements])
+            el_cogs = [np.mean([el.get_cog() for el in sel_elements if el.label==el_label], axis=0) for el_label in sel_element_labels]
+            el_labels = [None]*len(sel_element_labels)
+
+            for ix, el_label in enumerate(sel_element_labels):        
+                vals = [] 
+                for sub_el_ix, element in enumerate([el for el in sel_elements if el.label==el_label]):
+                    el_ix = sub_el_ix+sel_elements.index(element)
+                    el_vals = sel_values[el_ix]
+                    vals.append(el_vals)
+                vals = np.array(vals).flatten()
+
+                if np.nanmin(vals)==np.nanmax(vals): 
+                    selval = ('{val1' + sel_val_format + '}').format(val1=np.nanmin(vals))
+                elif np.all(np.isnan(vals)):
+                    selval = 'N/A'
+                else:
+                    selval = ('{val1' + sel_val_format + '}-' + '{val2' + sel_val_format + '}').format(val1=np.nanmin(vals), val2=np.nanmax(vals))
+                    
+                el_labels[ix] = f'{el_label} ({selval})'
         else:
-            el_labels = [el.label for el in sel_elements]
-        
-        element_label_visual = scene.Text(text=el_labels,  pos=el_cog, **elsellab_settings)
+            el_cogs = [el.get_cog() for el in sel_elements_org]
+            el_labels = [str(el.label) for el in sel_elements_org]
+
+        element_label_visual = scene.Text(text=el_labels,  pos=el_cogs, **elsellab_settings)
         view.add(element_label_visual)       
 
 
     # Node labels
     if node_labels:
         node_labels = [str(node.label) for node in nodes]
-        element_label_visual = scene.Text(text=node_labels,  pos=node_pos, **nlab_settings)
+        element_label_visual = scene.Text(text=node_labels, pos=node_pos, **nlab_settings)
         view.add(element_label_visual)
 
     # Nodes
@@ -367,8 +449,8 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
     # Add transformation matrices
     if plot_tmat_ax is not None:
         for ax in plot_tmat_ax:
-            el_vecs = np.vstack([conv_fun(element.tmat[ax, :])[0:3] for element in elements])*tmat_scaling
-            el_cogs = np.vstack([conv_fun(element.get_cog()) for element in elements])
+            el_vecs = np.vstack([conv_fun(element.tmat[ax, :])[0:3] for element in elements_org])*tmat_scaling
+            el_cogs = np.vstack([conv_fun(element.get_cog()) for element in elements_org])
             
             # INTERTWINE TMAT AND ELCOGS
             arrow_data = np.hstack([el_cogs, el_cogs+el_vecs])

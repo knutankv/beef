@@ -5,6 +5,7 @@ FE objects submodule: elements
 from ..fe.section import Section
 import numpy as np
 from ..general import transform_unit, blkdiag
+from copy import deepcopy
 
 class BeamElement:
     '''
@@ -198,6 +199,37 @@ class BeamElement:
     def ndofs(self):
         return self.nodes[0].ndofs + self.nodes[1].ndofs
 
+    def subdivide(self, n):
+        '''
+        Divide element into n elements.
+
+        Arguments
+        -----------
+        n : int
+            number of divisions/resulting elements
+            
+        Returns
+        -------------
+        elements : obj
+            list of new element objects
+            
+        '''
+        
+        elements = [None]*n
+        x0 = self.nodes[0].coordinates
+        x1 = self.nodes[1].coordinates
+        v = x1-x0
+        
+        for el in range(n):
+            elements[el] = deepcopy(self)
+            elements[el].nodes[0].coordinates = x0+v*1/n*el
+            elements[el].nodes[1].coordinates = x0+v*1/n*(el+1)
+            
+            elements[el].initiate_nodes()
+        
+        return elements
+    
+
 class BeamElement2d(BeamElement):
     '''
     Two-dimensional beam element class.
@@ -212,7 +244,7 @@ class BeamElement2d(BeamElement):
         section object to define element (standard value is standard initialized Section object)
     shear_flexible : False, optional
         whether or not to include shear flexibility
-    mass_formulation : {'timoshenko', 'euler', 'lumped'}
+    mass_formulation : {'euler', 'timoshenko', 'lumped'}
         what mass formulation to apply (refers to shape functions used)
     nonlinear : True, optional
         whether or not to use nonlinear internal functions for element
@@ -220,7 +252,7 @@ class BeamElement2d(BeamElement):
         applied axial force (for linearized geometric stiffness calculation)
     '''
     def __init__(self, nodes, label, section=Section(), shear_flexible=False, 
-                 mass_formulation='timoshenko', nonlinear=True, N0=None):
+                 mass_formulation='euler', nonlinear=True, N0=None):
         self.nodes = nodes
         self.label = int(label)
         self.section = section
