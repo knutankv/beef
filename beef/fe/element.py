@@ -902,7 +902,7 @@ class BeamElement3d(BeamElement):
         in a left-handed csys (*experimental*)
     '''
     def __init__(self, nodes, label=None, section=Section(), mass_formulation='consistent', 
-                 shear_flexible=False, nonlinear=False, e2=None, N0=0, left_handed_csys=False):
+                 shear_flexible=False, nonlinear=True, e2=None, N0=0, left_handed_csys=False):
         self.nodes = nodes
         self.label = label
         self.section = section
@@ -922,6 +922,8 @@ class BeamElement3d(BeamElement):
         self.dv = np.zeros(6)
         self.t = np.zeros(6)
         self.q = np.zeros(12)
+        self.phi_s = np.zeros(3)
+        self.phi_a = np.zeros(3)
         self.dphi_s = np.zeros(3)
         self.dphi_a = np.zeros(3)
 
@@ -945,7 +947,7 @@ class BeamElement3d(BeamElement):
             self.get_local_m = self.local_m_consistent
 
         if nonlinear:
-            self.update = self.update_nonlinear
+            self.update = self.update_nonlinear_incremental
         else:
             self.update = self.update_linear
 
@@ -954,7 +956,10 @@ class BeamElement3d(BeamElement):
         self.update_m()
         self.update()  
 
-    
+    @property
+    def e3(self):
+        return self.R[2,:]
+        
     @property
     def N(self):
         return self.t[3]
@@ -1047,14 +1052,13 @@ class BeamElement3d(BeamElement):
         
     def update_nonlinear(self, incremental=False):
         '''
-        Updates in element due to new nodal
-        coordinates and displacements. Analogous to 
+        Updates in element due to new nodal coordinates and displacements. 
         Algorithm 5.2 in Krenk [1].
         '''
 
         self.perform_rotations()
         self.update_geometry()
-        
+
         self.update_v()
         self.t = self.get_kd_corot() @ self.v               # new internal forces (element forces) based on the two above  
         self.q = self.tmat.T @ self.get_S() @ self.t    # calculate nodal forces in global format 
@@ -1071,18 +1075,24 @@ class BeamElement3d(BeamElement):
         R0 = self.R.T           # not updated (as intended) because update_geometry is not run yet
 
         Rupd = quat.R(r0, r, row_wise=False) @ R0    # updated R from total rotation of nodes
- 
+        
         # Establish axis to rotate about
-        n = Rupd[:, 0] + self.e # self.e = dx/L, updated beacuse taken directly from updated nodal coordinates 
+        nx = Rupd[:, 0] 
+        n = nx + self.e     # dx/L=self.e, updated beacuse taken directly from updated nodal coordinates 
         n = n/np.linalg.norm(n)
         
-        Rupd[:,0] = -Rupd[:,0]
+        # Flip x-axis and project into new axis
+        Rupd[:, 0] = -Rupd[:, 0]
         Rupd = (np.eye(3) - 2 * np.outer(n,n)) @ Rupd
         
+        # Establish symmetrical and asymmetrical deformation modes
+        nx = Rupd[:, 0]         #updated nx
         self.phi_s = 4 * Rupd.T @ s
-        self.phi_a = 4 * Rupd.T @ np.cross(Rupd[0,:], n)
-        self.e2 = Rupd[:,1]
-        
+        self.phi_a = 4 * Rupd.T @ np.cross(nx, n)
+        self.e2 = Rupd[:, 1]    # self.e2 = ny, 
+                                # self.e is given directly from nodal positions
+                                # self.e3 is given by cross-product of e and e2
+                                
     
     def update_v(self):
         '''
@@ -1173,7 +1183,7 @@ class BeamElement3d(BeamElement):
         self.perform_rotations_inc()
         self.update_geometry()              # update all node positions and element geometry     
         self.update_v_inc()                 # compute displacement mode            
-        self.t = self.get_kd() @ self.v               # new internal forces (element forces) based on the two above  
+        self.t = self.get_kd_corot() @ self.v               # new internal forces (element forces) based on the two above  
         self.q = self.tmat.T @ self.get_S() @ self.t    # calculate nodal forces in global format 
         self.update_k()   
         
@@ -1193,24 +1203,26 @@ class BeamElement3d(BeamElement):
             
         '''
 
+        R0 = self.R.T
+        nx = R0[:, 0]
+        
         du_A, du_B = self.nodes[0].du, self.nodes[1].du
-        self.dphi_s = self.R @ (du_B[3:] - du_A[3:]) # Eq. 5.125
-        self.dphi_a = (self.R @ (du_B[3:] + du_A[3:]) -
-                  2*np.cross(self.R[0,:], (du_B[:3]-du_A[:3])/self.L))  # Eq. 5.126
+        self.dphi_s = R0.T @ (du_B[3:] - du_A[3:]) # Eq. 5.125
+        self.dphi_a = (R0.T @ (du_B[3:] + du_A[3:]) -
+                  2*np.cross(nx, (du_B[:3]-du_A[:3]))/self.L)  # Eq. 5.126
         
         c = np.cos(self.dphi_a[0])
         s = np.sin(self.dphi_a[0])
         
         Rupd = np.zeros([3, 3])
-        Rupd[:, 1:] = self.R[1:, :].T @ np.array([[c, -s], [s, c]])     # [n_y, n_z] in Algorithm 5.2
+        Rupd[:, 1:] = R0[:, 1:] @ np.array([[c, -s], [s, c]])     # [n_y, n_z] in Algorithm 5.2
 
-        n = self.R[0,:] + self.e
+        n = nx + self.e
         n = n/np.linalg.norm(n)
-        n = n[np.newaxis, :]
             
-        Rupd[:, 0] = -self.R[0,:]
+        Rupd[:, 0] = -R0[:, 0]
 
-        Rupd = (np.eye(3) - 2 * n.T @ n) @ Rupd
+        Rupd = (np.eye(3) - 2 * np.outer(n,n)) @ Rupd
         self.e2 = Rupd[:, 1]
         
     def update_v_inc(self):
