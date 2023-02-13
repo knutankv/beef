@@ -902,7 +902,7 @@ class BeamElement3d(BeamElement):
         in a left-handed csys (*experimental*)
     '''
     def __init__(self, nodes, label=None, section=Section(), mass_formulation='consistent', 
-                 shear_flexible=False, nonlinear=True, e2=None, N0=0, left_handed_csys=False):
+                 shear_flexible=False, nonlinear=False, e2=None, N0=0, left_handed_csys=False):
         self.nodes = nodes
         self.label = label
         self.section = section
@@ -921,6 +921,7 @@ class BeamElement3d(BeamElement):
         self.v = np.zeros(6)
         self.dv = np.zeros(6)
         self.t = np.zeros(6)
+        self.q = np.zeros(12)
         self.dphi_s = np.zeros(3)
         self.dphi_a = np.zeros(3)
 
