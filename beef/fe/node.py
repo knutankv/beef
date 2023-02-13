@@ -4,6 +4,7 @@ FE objects submodule: nodes
 
 import functools
 import numpy as np
+from .. import quat
 
 @functools.total_ordering
 
@@ -35,7 +36,12 @@ class Node:
         self.x = None
         self.rots = None
         self.u = None 
+        self.du = None
         self.dim = len(coordinates[1:])
+        
+        # Initialize quaternions of node
+        self.r0 = 1.0
+        self.r = np.array([0.0, 0.0, 0.0])
 
     # CORE METHODS
     def __eq__(self, other):
@@ -58,3 +64,9 @@ class Node:
 
     def __hash__(self):
         return hash(self.label)
+    
+    def increment_quaternions(self):
+        if len(self.coordinates)==3:
+            self.r0, self.r = quat.add_increment_from_rot(self.r0, self.r, self.du[3:]) 
+
+            

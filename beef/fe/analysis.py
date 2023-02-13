@@ -27,7 +27,8 @@ class Analysis:
     forces : obj
         list of BEEF Force objects
     prescribed_N : fun
-        function (time instance is input) returning list/array of axial forces ordered in the same manner as the elements are ordered in the element definition
+        function (time instance is input) returning list/array of axial forces ordered in the 
+        same manner as the elements are ordered in the element definition
     prescribed_displacement : fun
         TODO - not finalized
     tmax : 1
@@ -39,7 +40,8 @@ class Analysis:
     t0 : 0
         start time
     tol : dict
-        dictionary specifying tolerance levels for 'u' (displacement) and 'r' (force residual) standard is no tolerances
+        dictionary specifying tolerance levels for 'u' (displacement) 
+        and 'r' (force residual) standard is no tolerances
     nr_modified : False
         whether or not to use modified Newton-Raphson (for relevant nonlinear solvers)
     newmark_factors : {'beta': 0.25, 'gamma': 0.5}
@@ -60,7 +62,6 @@ class Analysis:
         if prescribed_displacements is None:
             prescribed_displacements = []
 
-        
         self.eldef = copy(eldef)  #create copy of part, avoid messing with original part definition
 
         self.forces = forces
@@ -72,7 +73,7 @@ class Analysis:
         if 'alpha' not in newmark_factors:
             newmark_factors['alpha'] = 0.0
 
-        # Change later:
+        # TODO: treat prescribed displacements
         # self.dof_pairs = np.vstack([self.eldef.dof_pairs, self.get_dof_pairs_from_prescribed_displacements()])
         self.dof_pairs = self.eldef.dof_pairs
         self.Linv = dof_pairs_to_Linv(self.dof_pairs, len(self.eldef.nodes)*(self.eldef.dim-1)*3)
@@ -261,7 +262,7 @@ class Analysis:
                 # Update residual
                 self.eldef.deform(L @ u)    # deform nodes in part given by u => new f_int and K from elements
                 f_int = L.T @ self.eldef.q       # new internal (stiffness) force 
-
+                
                 r = newmark.residual_hht(f, f_prev, f_int, f_int_prev, K, C, M, u_prev, udot, udot_prev, uddot, alpha, gamma, beta, dt)
 
                 # Check convergence
@@ -458,7 +459,8 @@ class Analysis:
 
     def run_static(self, print_progress=True, return_results=False):
         '''
-        Run static (nonlinear) solution, using parameters and element definition specified in parent Analysis object.
+        Run static (nonlinear) solution, using parameters and element 
+        definition specified in parent Analysis object.
 
         Arguments
         --------------
@@ -490,14 +492,17 @@ class Analysis:
             # Increment force iterator object
             f_prev = 1.0 * f    # copy previous force level (used to scale residual for convergence check)         
             f = L.T @ self.get_global_forces(tk)     # force in increment k  
+
             df = f - f_prev   # force increment
             
             # Deform part
             self.eldef.deform(L @ u)    # deform nodes in part given by u => new f_int and K from elements
             du_inc = u*0        # total displacement during increment
-
+            
             # Calculate internal forces and residual force
             f_int = L.T @ self.eldef.q
+
+
             K = L.T @ self.eldef.k @ L
             r = f - f_int       # residual force
 
@@ -505,6 +510,7 @@ class Analysis:
             for i in range(0, self.itmax):
                 # Iteration, new displacement (NR iteration)
                 du = solve(K, r)
+
                 u = u + du     # add to u, NR  
                 du_inc = du_inc + du
 
@@ -512,9 +518,12 @@ class Analysis:
                 self.eldef.deform(L @ u)    # deform nodes in part given by u => new f_int and K from elements
                 f_int = L.T @ self.eldef.q       # new internal (stiffness) force
                 r = f - f_int                   # residual force
-
+  
+                # print(df)
                 # Check convergence
-                converged = is_converged([np.linalg.norm(du), np.linalg.norm(r)], [self.tol['u'], self.tol['r']], scaling=[np.linalg.norm(du_inc), np.linalg.norm(df)])
+                converged = is_converged([np.linalg.norm(du), np.linalg.norm(r)],
+                                         [self.tol['u'], self.tol['r']], 
+                                         scaling=[np.linalg.norm(du_inc), np.linalg.norm(f)])
                 
                 if not self.run_all_iterations and converged:
                     break

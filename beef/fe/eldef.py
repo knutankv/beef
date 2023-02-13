@@ -35,7 +35,9 @@ class ElDef:
 
     '''
 
-    def __init__(self, nodes, elements, constraints=None, features=None, include_linear_kg=False, constraint_type='none', domain='3d', assemble=True):
+    def __init__(self, nodes, elements, constraints=None, features=None, 
+                 include_linear_kg=False, constraint_type='none', domain='3d', 
+                 assemble=True):
         self.nodes = nodes
         self.elements = elements
         self.assign_node_dofcounts()
@@ -511,11 +513,12 @@ class ElDef:
 
         '''
         for node in self.nodes:
+            node.du = u[node.global_dofs] - node.u
             node.u = u[node.global_dofs]
             node.x = node.x0 + node.u
+            node.increment_quaternions()
 
         for element in self.elements:
-            element.update_geometry()
             element.update()
 
         if update_tangents:
@@ -534,6 +537,7 @@ class ElDef:
 
         '''
         for node in self.nodes:
+            node.du = u[node.global_dofs] - node.u
             node.u = u[node.global_dofs]
             node.x = node.x0 + node.u
 
@@ -558,7 +562,7 @@ class ElDef:
         if u is None:
             u = np.zeros([self.ndofs])
         
-        self.q = self.get_feature_mats(mats=['k']) @ u   
+        self.q = self.get_feature_mats(mats=['k']) @ u 
 
         for el in self.elements:
             ixs = np.hstack([el.nodes[0].global_dofs, el.nodes[1].global_dofs])
@@ -765,8 +769,9 @@ class ElDef:
             T = el.tmat
 
             mass[np.ix_(dof_range, dof_range)] += el.get_m()
+            
             stiffness[np.ix_(dof_range, dof_range)] += el.get_k()
-            geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg()
+            geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg_lin()
 
         if self.constraints != None:  
             if constraint_type == 'lagrange':
@@ -1086,9 +1091,14 @@ def create_nodes_and_elements(node_matrix, element_matrix, sections=None, left_h
 
         if element_types[el_ix] == 'beam':
             if dim==3:
-                elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
+                elements[el_ix] = BeamElement3d([nodes[ix1], nodes[ix2]], 
+                                            label=int(element_matrix[el_ix, 0]), 
+                                            section=sections[el_ix], 
+                                            left_handed_csys=left_handed_csys)
             else:
-                elements[el_ix] = BeamElement2d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix])
+                elements[el_ix] = BeamElement2d([nodes[ix1], nodes[ix2]], 
+                                                label=int(element_matrix[el_ix, 0]), 
+                                                section=sections[el_ix])
 
         elif element_types[el_ix] == 'bar':
             # Currently only added to enable extraction of Kg for bars - not supported otherwise (assumed as beams otherwise)
