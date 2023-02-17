@@ -20,6 +20,7 @@ def quat_from_R(R):
          scalar defining the trace of the rotation tensor
      r : float
          numpy array with three quaternions r1,r2,r3
+
     '''
     
 
@@ -51,21 +52,32 @@ def R(r0, r, row_wise=True):
         numpy array with three quaternions r1,r2,r3
     row_wise : {True, False}
         if converting the result such that basis vectors are
-        stacked column-wise (instead of the column-wise used in Krenk)
+        stacked column-wise (instead of the column-wise used in [1])
 
     Returns 
     ---------
     R : float
         numpy 3x3 matrix describing to rotation transformation
         matrix equivalent to the input quaternion representation
+        
+    References
+    ------------
+    [[1]](../#1) Krenk, 2009.
+              
     '''
 
-    r_hat = np.array([[0, -r[2], r[1]], 
-                     [r[2], 0, -r[0]], 
-                     [-r[1], r[0], 0]]) # Equation 3.7 in Krenk [1]
+    # r_hat = np.array([[0, -r[2], r[1]], 
+                    #  [r[2], 0, -r[0]], 
+                    #  [-r[1], r[0], 0]]) # Equation 3.7 in Krenk [1]
 
-    R = (r0**2 - np.dot(r,r)) * np.eye(3) + 2*r0*r_hat + 2 * np.outer(r,r)
+    # R_alt = (r0**2 - np.dot(r,r)) * np.eye(3) + 2*r0*r_hat + 2 * np.outer(r,r)
+    # R = (r0*np.eye(3)+r_hat)**2+np.outer(r,r)
+    # print(R_alt==R)
 
+    R = np.array([[r0**2 + r[0]**2-r[1]**2-r[2]**2, 2*(r[0]*r[1]-r0*r[2]), 2*(r[0]*r[2]+r*r[1])],
+                  [2*(r[1]*r[0]), r0**2-r[0]**2+r[1]**2-r[2]**2, 2*(r[1]*r[2]-r0*r[0])],
+                  []])
+    
     # Convert such that unit vectors are stacked row-wise
     if row_wise:    
         R = R.T
@@ -75,7 +87,7 @@ def R(r0, r, row_wise=True):
 def increment_from_drot(drot):
     '''
     Establish linearized quaternion increments from 
-    given rotation increments.
+    given rotation increments, as in Eq. 5.123 in Krenk [1].
 
     Arguments
     -----------
@@ -90,6 +102,11 @@ def increment_from_drot(drot):
     dr : float
         numpy array with three quaternions r1,r2,r3, corresponding
         to the incremental rotation
+        
+    References
+    ------------
+    [[1]](../#1) Krenk, 2009.
+          
     '''
 
     dr = 0.5 * drot
@@ -123,6 +140,11 @@ def add_increment_from_quat(r0, r, dr0, dr):
     r : float
         numpy array with three quaternions r1,r2,r3 representing
         the final rotation
+
+        
+    References
+    ------------
+    [[1]](../#1) Krenk, 2009.
     '''
 
     r0 = dr0*r0 - np.dot(dr, r)
@@ -152,9 +174,14 @@ def add_increment_from_rot(r0, r, drot):
     r : float
         numpy array with three quaternions r1,r2,r3 representing
         the final rotation
+        
+        
+    References
+    ------------
+    [[1]](../#1) Krenk, 2009.
     '''
 
-    dr0, dr = increment_from_drot(drot)
+    dr0, dr = increment_from_drot(drot)     
     r0, r = add_increment_from_quat(r0, r, dr0, dr)
 
     return r0,r
@@ -192,6 +219,10 @@ def mean(ra0, ra, rb0, rb):
     s : float
         numpy array with three quaternions s1,s2,s3 representing
         the difference in rotation
+        
+    References
+    ------------
+    [[1]](../#1) Krenk, 2009.
     '''    
 
     s0 = 0.5 * np.sqrt((ra0+rb0)**2 + np.linalg.norm(ra+rb)**2)

@@ -557,16 +557,17 @@ class ElDef:
 
     def update_internal_forces(self, u=None):       # on part level
         '''
-        
+        Update internal forces vector q in element definition from internal 
+        forces in all elements.
         '''
+
         if u is None:
             u = np.zeros([self.ndofs])
         
         self.q = self.get_feature_mats(mats=['k']) @ u 
 
         for el in self.elements:
-            ixs = np.hstack([el.nodes[0].global_dofs, el.nodes[1].global_dofs])
-            self.q[ixs] += el.q
+            self.q[el.global_dofs] += el.q
 
     def update_tangent_stiffness(self):
         '''

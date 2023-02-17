@@ -760,7 +760,7 @@ class BeamElement2d(BeamElement):
 
         Notes 
         ----------
-        {v} describes the deformation modes of the element, which are given by:
+        ${v}$ describes the deformation modes of the element, which are given by:
             
         1. Elongation of element
         2. Angle of symmetric deformation mode
@@ -862,14 +862,16 @@ class BeamElement2d(BeamElement):
     # --------------- MISC ------------------------------
     def get_local_kg(self):  # element level function (global DOFs)
         '''
-        Extract geometric stiffness from corotational formulation.
+        Extract geometric stiffness from corotational formulation. 
 
         Notes
         ---------
         The stiffness is established as follows:
         $$
-        [k_g] = [T]^T ([S] [K_{d,g}] [S]^T) [T]
+        [k_g] = [T]^T ([S] [K_{c,g}] [S]^T) [T]
         $$
+        
+        where $[K_{c,g}]$ is the geometric stiffness on corotational form.
         '''
 
         return self.tmat.T @ self.get_S() @ self.get_kg_corot() @ self.get_S().T @ self.tmat #from corotated formulation
@@ -947,7 +949,7 @@ class BeamElement3d(BeamElement):
             self.get_local_m = self.local_m_consistent
 
         if nonlinear:
-            self.update = self.update_nonlinear_incremental
+            self.update = self.update_nonlinear
         else:
             self.update = self.update_linear
 
@@ -1053,10 +1055,15 @@ class BeamElement3d(BeamElement):
     def update_nonlinear(self, incremental=False):
         '''
         Updates in element due to new nodal coordinates and displacements. 
-        Algorithm 5.2 in Krenk [1].
+        Algorithm 5.3 in Krenk [[1]](../#1).
+        
+        References
+        ------------
+        [[1]](../#1) Krenk, 2009.
+              
         '''
-
         self.perform_rotations()
+        
         self.update_geometry()
 
         self.update_v()
@@ -1066,14 +1073,34 @@ class BeamElement3d(BeamElement):
         self.update_k()                                 # --> new tangent stiffness    
         
         
-  
     def perform_rotations(self):
-        # Mean and difference rotations
+        '''
+        Conducts the following steps from Algorithm 5.3 in [[1]](../#1):
+                                                                 
+        * Calculate mean and difference quaternions corresponding to rotations
+          of the two nodes of the element
+        * Update effective transformation matrix based on previous (non-updated)
+          transformation matrix $[R]$ and rotation quaternions.
+        * Establish exis to rotate about and rotate about that.
+        * Calculate symmetric and asymmetric local rotation vectors (on corotational
+          form) of element from $\{\phi_s\} = 4 [R]^T \{s\}$ and 
+          $\{\phi_a\} = 4 [R]^T \{n_x\} \cross \{n\}$, respectively.
+        * Update ´e2´ from new transformation matrix. Remember, `e2` is defined
+          as the first perpendicular axis, i.e. local y, of the element (`e` is axial,
+          `e3` would be second perpendicular, i.e. local z).
+        
+        References
+        ------------
+        [[1]](../#1) Krenk, 2009.
+                    
+        '''
+        
+        # Mean and difference rotations represented as quaternions
         r0, r, s0, s = quat.mean(self.nodes[0].r0, self.nodes[0].r,
                   self.nodes[1].r0, self.nodes[1].r)
         
         R0 = self.R.T           # not updated (as intended) because update_geometry is not run yet
-
+        
         Rupd = quat.R(r0, r, row_wise=False) @ R0    # updated R from total rotation of nodes
         
         # Establish axis to rotate about
@@ -1100,7 +1127,7 @@ class BeamElement3d(BeamElement):
 
         Notes 
         ----------
-        {v} describes the incremental deformation modes of the element, which are given by:
+        ${v}$ describes the incremental deformation modes of the element, which are given by:
             
         1. Twist of element
         2. Bending about local y-axis
@@ -1174,10 +1201,11 @@ class BeamElement3d(BeamElement):
         
         return kd_corot
     
+    
     # --------- INCREMENTAL COROTATIONAL METHODS -----------------
     def update_nonlinear_incremental(self):
         '''
-        TODO: add as option and describe method.
+        TODO: add as option and describe method. Not verified!
         '''
 
         self.perform_rotations_inc()
@@ -1200,6 +1228,10 @@ class BeamElement3d(BeamElement):
             increment of symmetrical angle
         dphi_a : float
             increment of asymmetrical angle
+            
+        References
+        ------------
+        [[1]](../#1) Krenk, 2009.
             
         '''
 
@@ -1231,7 +1263,7 @@ class BeamElement3d(BeamElement):
 
         Notes 
         ----------
-        {dv} describes the incremental deformation modes of the element, which are given by:
+        ${dv}$ describes the incremental deformation modes of the element, which are given by:
             
         1. Twist of element
         2. Bending about local y-axis
@@ -1265,6 +1297,10 @@ class BeamElement3d(BeamElement):
         Notes
         ---------
         See Eq. 5.112--5.115 in [[1]](../#1).
+                                      
+        References
+        ------------
+        [[1]](../#1) Krenk, 2009.
 
         '''
 
@@ -1301,22 +1337,28 @@ class BeamElement3d(BeamElement):
                        [K31, K32, K33, K34], 
                        [K41, K42, K43, K44]])
         
+        print(np.linalg.norm(kd-kd.T))
+        
         return kd
 
 
 
     def get_local_kg(self):
         '''
-        Get geometric part of stiffness matrix on full format
+        Get geometric part of stiffness matrix on full format (local DOFs).
 
         Returns
         -----------
-        k_dg : float
+        kg : float
             12x12 numpy array (matrix) describing the geometric stiffness
 
         Notes
         -----------
         \(k_{g}\) is given in Eq. 5.116--5.121 in [[1]](../#1).
+                                                        
+        References
+        ------------
+        [[1]](../#1) Krenk, 2009.
         '''
 
         mA = self.q[3:6]
@@ -1357,13 +1399,12 @@ class BeamElement3d(BeamElement):
                               [2*mB[1]-mA[1], 0, 4/5*L*self.N]])
         
         
-        Kg = np.block([[K11, K12, K13, K14], 
+        kg = np.block([[K11, K12, K13, K14], 
                        [K21, K22, K23, K24], 
                        [K31, K32, K33, K34], 
                        [K41, K42, K43, K44]])
-        
 
-        return Kg
+        return kg
         
     
     def get_local_k(self):
@@ -1374,11 +1415,14 @@ class BeamElement3d(BeamElement):
         -----------
         k_local : float
             2d numpy array describing total local tangent 
-            stiffness matrix of 3d beam (12x12)
+            stiffness matrix of 3d beam (12x12), including
+            both deformation/constitutive stiffness and 
+            geometric stiffness
 
         '''
         
         return self.get_local_kd() + self.get_local_kg()
+    
     
     def get_local_kd(self):
         '''
