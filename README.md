@@ -62,6 +62,9 @@ W. Fang, EN234: Three-dimentional Timoshenko beam element undergoing axial, tors
 <a id="3">[3]</a>
 H. Karadeniz, M. P. Saka, and V. Togan, “Finite Element Analysis of Space Frame Structures BT  - Stochastic Analysis of Offshore Steel Structures: An Analytical Appraisal,” H. Karadeniz, Ed. London: Springer London, 2013, pp. 1–119. https://link.springer.com/content/pdf/10.1007%2F978-1-84996-190-5_1
 
+<a id="4">[4]</a> P.I. Bruheim, Development and validation of a finite element software facilitating large-displacement aeroelastic analysis of wind turbines, Norwegian University of Science and Technology, 2012. https://core.ac.uk/download/pdf/30855172.pdf
+
+
 Citation
 =======================
 ZENODO citation element will be created.

@@ -501,8 +501,7 @@ class Analysis:
             
             # Calculate internal forces and residual force
             f_int = L.T @ self.eldef.q
-
-
+            
             K = L.T @ self.eldef.k @ L
             r = f - f_int       # residual force
 
@@ -515,11 +514,10 @@ class Analysis:
                 du_inc = du_inc + du
 
                 # Update residual
-                self.eldef.deform(L @ u)    # deform nodes in part given by u => new f_int and K from elements
-                f_int = L.T @ self.eldef.q       # new internal (stiffness) force
+                self.eldef.deform(L @ u, du=L@du)        # deform nodes in part given by u => new f_int and K from elements
+                f_int = L.T @ self.eldef.q      # new internal (stiffness) force
                 r = f - f_int                   # residual force
-  
-                # print(df)
+
                 # Check convergence
                 converged = is_converged([np.linalg.norm(du), np.linalg.norm(r)],
                                          [self.tol['u'], self.tol['r']], 
@@ -529,7 +527,8 @@ class Analysis:
                     break
 
                 # Assemble tangent stiffness if a new iteration is needed
-                K = L.T @ self.eldef.k @ L
+                if ~self.nr_modified:
+                    K = L.T @ self.eldef.k @ L
 
             self.u[:, k] = L @ u    # save to analysis time history
 
