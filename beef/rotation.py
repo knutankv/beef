@@ -1,8 +1,73 @@
 '''
-Quaternion operation functions.
+Quaternion  and tensor rotations.
 '''
 
 import numpy as np
+
+def rot_from_R(R):
+    '''
+    Calculate rotation vector from (deformation part of) rotation tensor.
+
+    Arguments
+    -------------
+    R : float
+        numpy 3x3 matrix describing to rotation transformation
+        matrix equivalent to the incremental rotation vector
+
+    Returns
+    -----------
+    rot : float
+        3-by-1 numpy array with three rotations of a node    
+
+    '''
+
+    rot = 0.5*np.array([R[2,1] - R[1,2],
+                        R[0,2] - R[2,0],
+                        R[1,0] - R[0,1]])
+    
+    theta = np.linalg.norm(rot)
+
+    if theta<1e-12:
+        scale = 1.0
+    else:
+        scale = theta/np.sin(theta)
+    
+    return scale * rot
+
+
+def R_from_drot(drot):
+    '''
+    Calculate the rotation tensor from an incremental rotation vector.
+
+    Arguments
+    -----------
+    drot : float
+        3-by-1 numpy array with three rotation increments of a node
+
+    Returns
+    -------------
+    R : float
+        numpy 3x3 matrix describing to rotation transformation
+        matrix equivalent to the incremental rotation vector
+
+    '''
+
+    theta = np.linalg.norm(drot)
+    if theta<1e-12:
+        return np.eye(3)
+    else:
+        n = drot/theta
+        N = np.zeros([3,3])
+        N[1-1,2-1]=-n[3-1]
+        N[1-1,3-1]=n[2-1]
+        N[2-1,3-1]=-n[1-1]  
+        I = np.eye(3)
+
+        N = N - N.T
+        R = I + N * np.sin(theta) + (np.outer(n,n) - I) * (1 - np.cos(theta))
+
+        return R
+
 
 def quat_from_R(R):
     '''
@@ -39,7 +104,7 @@ def quat_from_R(R):
     return r0, r
 
 
-def R(r0, r, row_wise=True): 
+def R_from_quat(r0, r, row_wise=True): 
     '''
     Calculate transformation matrix [R] according to
     Eq 3.50 in Krenk [1].
@@ -66,17 +131,10 @@ def R(r0, r, row_wise=True):
               
     '''
 
-    # r_hat = np.array([[0, -r[2], r[1]], 
-                    #  [r[2], 0, -r[0]], 
-                    #  [-r[1], r[0], 0]]) # Equation 3.7 in Krenk [1]
-
-    # R_alt = (r0**2 - np.dot(r,r)) * np.eye(3) + 2*r0*r_hat + 2 * np.outer(r,r)
-    # R = (r0*np.eye(3)+r_hat)**2+np.outer(r,r)
-    # print(R_alt==R)
-
-    R = np.array([[r0**2 + r[0]**2-r[1]**2-r[2]**2, 2*(r[0]*r[1]-r0*r[2]), 2*(r[0]*r[2]+r*r[1])],
-                  [2*(r[1]*r[0]), r0**2-r[0]**2+r[1]**2-r[2]**2, 2*(r[1]*r[2]-r0*r[0])],
-                  []])
+    r_hat = np.array([[0, -r[2], r[1]], 
+                     [r[2], 0, -r[0]], 
+                     [-r[1], r[0], 0]]) # Equation 3.7 in Krenk [1]
+    R = (r0**2 - np.dot(r,r)) * np.eye(3) + 2*r0*r_hat + 2 * np.outer(r,r)
     
     # Convert such that unit vectors are stacked row-wise
     if row_wise:    
@@ -187,7 +245,7 @@ def add_increment_from_rot(r0, r, drot):
     return r0,r
 
 
-def mean(ra0, ra, rb0, rb):
+def quat_mean_and_diff(ra0, ra, rb0, rb):
     '''
     Calculate the mean and difference quaternions from two sets of quaternions
     {ra0, ra} and {rb0, rb}.

@@ -4,7 +4,7 @@ FE objects submodule: nodes
 
 import functools
 import numpy as np
-from .. import quat
+from .. import rotation
 
 @functools.total_ordering
 
@@ -34,14 +34,12 @@ class Node:
         # Defined during element initialization
         self.x0 = None
         self.x = None
-        self.rots = None
         self.u = None 
         self.du = None
         self.dim = len(coordinates[1:])
         
-        # Initialize quaternions of node
-        self.r0 = 1.0
-        self.r = np.array([0.0, 0.0, 0.0])
+        # Initialize rotation tensor of node
+        self.R = np.eye(3)
 
     # CORE METHODS
     def __eq__(self, other):
@@ -64,9 +62,46 @@ class Node:
 
     def __hash__(self):
         return hash(self.label)
-    
-    def increment_quaternions(self):
-        if len(self.coordinates)==3:
-            self.r0, self.r = quat.add_increment_from_rot(self.r0, self.r, self.du[3:]) 
 
+
+    def increment_rotation_tensor(self):
+        '''
+        Increments the rotation tensor describing the rotations of the node, based on defined
+        increment of rotational DOFs.
+
+        Notes
+        ----------
+        First, establishes the rotation tensor $[R_{inc}]$ from the incremental rotation ${\Delta \theta}$ from Rodrigues
+        formula. Then, conducts the multiplication by the previous total rotational tensor $[R_{prev}]$ to yield new total 
+        rotations $[R] = [R_{inc}] [R_{prev}]$.
+        '''
+        if len(self.coordinates)==3:
+            self.R = rotation.R_from_drot(self.du[3:]) @ self.R     # global CSYS
+
+
+    def get_deformation_rotations(self, R0n):
+        '''
+        Establishes deformation part of rotations based on input corotational configuration (rigid body motion from reference) 
+        transformation matrix (defined at element level).
+
+        Arguments
+        ----------
+        R0n : float
+            3x3 matrix describing the rigid-body rotation to the corotated configuration from the base configuration ($C_0$ --> $C_{0n}$).
             
+        Returns
+        ----------
+        def_rots : float
+            numpy array with three components (pseudo-vector) of rotation from deformation contribution for node
+            
+        Notes
+        ----------
+        See Equation 4.41 and Section 2.4.3 in [[4]](../#4) Bruheim. Computes deformation tensor of total rotation from
+        $[R_d] = [R] [R_{0n}]^T$, then converts to pseudo-vector with rotations (as they are small due to assumption of
+        small strains).
+
+        '''
+        Rd = self.R @ R0n.T                 # Equation 4.41 in Bruheim [4]
+        def_rots = rotation.rot_from_R(Rd)  # Small angles --> convert tensor to rotation vector, as in Section 2.4.3 in Bruheim
+
+        return def_rots

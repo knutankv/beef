@@ -500,7 +500,7 @@ class ElDef:
         for node in self.nodes:
             node.x0 = node.x*1  # make deformed structure new reference
     
-    def deform(self, u, update_tangents=True):
+    def deform(self, u, du=None, update_tangents=True):
         '''
         Deform `ElDef` specified u.
 
@@ -513,10 +513,14 @@ class ElDef:
 
         '''
         for node in self.nodes:
-            node.du = u[node.global_dofs] - node.u
+            if du is None:
+                node.du = u[node.global_dofs] - node.u
+            else:
+                node.du = du[node.global_dofs]
+
             node.u = u[node.global_dofs]
             node.x = node.x0 + node.u
-            node.increment_quaternions()
+            node.increment_rotation_tensor()
 
         for element in self.elements:
             element.update()
@@ -756,7 +760,7 @@ class ElDef:
         stiffness : float
             global stiffness matrix
         geometric_stiffness : float
-            global linearized stiffness matrix
+            global linearized stiffness matrix if N0 is specified on element level
 
         '''
 
@@ -770,9 +774,8 @@ class ElDef:
             T = el.tmat
 
             mass[np.ix_(dof_range, dof_range)] += el.get_m()
-            
             stiffness[np.ix_(dof_range, dof_range)] += el.get_k()
-            geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg_lin()
+            geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg_axial()  #if N0 specified in 
 
         if self.constraints != None:  
             if constraint_type == 'lagrange':
