@@ -498,3 +498,92 @@ def frame_creator(frames=30, repeats=1, swing=False, full_cycle=False):
         base_scaling = np.linspace(start,1-d,frames) 
 
     return np.tile(base_scaling, repeats)
+
+def plot_elements(elements, overlay_deformed=False, plot_nodes=False, vals=None, el_opts={}, def_el_opts={}, node_opts={}, canvas_opts={},
+                  show=True, plot_tmat_ax=[], tmat_opts={}, tmat_scaling=10):
+    import pyvista as pv
+
+    def generate_mesh(els, field='x', pad_size=2):
+        # Coordinates of nodes
+        nodes = list(set([a for b in [el.nodes for el in els] for a in b])) #flat list of unique nodes
+        node_pos = np.vstack([getattr(node, field)[:3] for node in nodes])
+
+        nodes = [n.label for n in nodes]
+        edges = np.vstack([[nodes.index(el.nodes[0]), nodes.index(el.nodes[1])] for el in els])
+
+        # # We must "pad" the edges to indicate to vtk how many points per edge
+        padding = np.empty(edges.shape[0], int) * 2
+        padding[:] = pad_size
+        edges_w_padding = np.vstack((padding, edges.T)).T
+        mesh = pv.PolyData(node_pos, edges_w_padding)
+        return mesh
+
+    canvas_settings = dict(background_color='white')
+
+    tmat_settings = dict(show_edges=False)
+    
+    tmat_colors = ['#0000ff', '#00ff00', '#ff0000']
+
+    def_el_settings = dict(
+        render_lines_as_tubes=False,
+        style='wireframe',
+        line_width=3,
+        cmap='viridis',
+        show_scalar_bar=False,
+        color='#ee8899'
+        )
+    
+    el_settings = dict(
+        render_lines_as_tubes=True,
+        style='wireframe',
+        line_width=3,
+        cmap='viridis',
+        show_scalar_bar=False,
+        )
+    
+    if vals is None:
+        el_settings['color'] = '#44ff88'
+
+    node_settings = dict(
+        render_points_as_spheres=True,
+        color='magenta',
+        point_size=5
+    )  
+    
+    def_el_settings.update(def_el_opts)
+    canvas_settings.update(canvas_opts)
+    el_settings.update(el_opts)
+    node_settings.update(node_opts)
+    tmat_settings.update(tmat_opts)
+
+    if vals is None:
+        vals = [0]*len(elements)
+
+    pl = pv.Plotter()
+    mesh = generate_mesh(elements,'x0')
+    pl.add_mesh(mesh, **el_settings)
+    
+    if plot_nodes:
+        pl.add_points(mesh.extract_surface().points, **node_settings)
+
+    if overlay_deformed:
+        pl.add_mesh(generate_mesh(elements, 'x'), **def_el_settings)
+
+    for key in canvas_settings:
+        setattr(pl, key, canvas_settings[key])
+
+    if plot_tmat_ax is not None:
+        for ax in plot_tmat_ax:
+            vec = []
+            pos = []
+            for el in elements:
+                vec.append(el.tmat[ax, :][:3]*tmat_scaling)
+                pos.append(el.get_cog())
+
+            pl.add_arrows(np.vstack(pos), np.vstack(vec), color=tmat_colors[ax], **tmat_settings)
+
+    pl.view_isometric()
+    if show:
+        pl.show()
+
+    return pl
