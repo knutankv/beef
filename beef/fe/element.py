@@ -39,7 +39,7 @@ class BeamElement:
 
 
     # ------------- GEOMETRY AND PROPERTIES ---------------------------
-    def get_cog(self):
+    def get_cog(self, deformed=False):
         '''
         Get center of gravity coordinates of element.
 
@@ -49,7 +49,10 @@ class BeamElement:
             numpy array indicating the center of gravity of the element (2 or 3
             components based on dimensionality of system) 
         '''
-        return (self.nodes[0].coordinates + self.nodes[1].coordinates)/2
+        if deformed:
+            return (self.nodes[0].x[:self.dim] + self.nodes[1].x[:self.dim])/2
+        else:
+            return (self.nodes[0].coordinates + self.nodes[1].coordinates)/2
 
 
     def get_vec(self, undeformed=False):
@@ -241,6 +244,14 @@ class BeamElement:
         return elements
     
 
+    # Transformation and rotation tensor dynamic properties
+    @property
+    def Tn(self):
+        '''
+        Current transformation matrix.
+        '''
+        return self.tmat[:self.dim, :self.dim]
+
 class BeamElement2d(BeamElement):
     '''
     Two-dimensional beam element class.
@@ -307,6 +318,7 @@ class BeamElement2d(BeamElement):
         self.update_geometry()
         self.update_m()
         self.update()   
+        self.T0 = self.Tn*1     # initial transformation matrices
 
 
     # ---------- DYNAMIC PROPERTIES ------------------
@@ -982,14 +994,6 @@ class BeamElement3d(BeamElement):
     @property
     def Qz(self):
         return (self.q_loc[4+6] + self.q_loc[4])/self.L
-
-    # Transformation and rotation tensor dynamic properties
-    @property
-    def Tn(self):
-        '''
-        Current transformation matrix.
-        '''
-        return self.tmat[:3, :3]
     
     @property
     def R0n(self):
