@@ -534,7 +534,7 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
     tmat_colors = ['#ff0000', '#00ff00', '#0000ff']
 
     if vals is None and val_fun is None:
-        el_settings['color'] = '#44ff88'
+        el_opts['color'] = '#44ff88'
 
     if val_fun is not None:
         if type(val_fun) is str:
