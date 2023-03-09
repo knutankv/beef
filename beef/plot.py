@@ -172,7 +172,7 @@ def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements
         format used to create colorbar (':.2e' is standard)
     sel_val_format : str, optional
         format used to create values in texts of selected elements (':.2e' is standard)
-    highglight : str, optional
+    highlight : str, optional
         list of special values to highlight ('max' and 'min' supported currently)
 
 
@@ -573,6 +573,7 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
         render_lines_as_tubes=True,
         style='wireframe',
         line_width=4,
+        lighting=True,
         cmap='viridis',
         show_scalar_bar=show_scalarbar['deformed'],
         color='#ee8899'
@@ -582,6 +583,7 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
         scalars=scalars['undeformed'],
         render_lines_as_tubes=True,
         style='wireframe',
+        lighting=True,
         line_width=4,
         cmap='viridis',
         show_scalar_bar=show_scalarbar['undeformed'],
@@ -591,6 +593,7 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
     node_settings = dict(
         render_points_as_spheres=True,
         color='magenta',
+        lighting=True,
         point_size=5
     )  
 
@@ -614,7 +617,10 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
         pl.add_mesh(generate_mesh(elements, 'x'),annotations=annotate_vals, scalar_bar_args=scalar_bar_settings, **def_el_settings)
     
     if plot_nodes:
-        pl.add_points(mesh.extract_surface().points, **node_settings)
+        if 'undeformed' in plot_states:
+            pl.add_points(mesh.extract_surface().points, **node_settings)
+        if 'deformed' in plot_states:
+            pl.add_points(generate_mesh(elements, 'x').extract_surface().points, **node_settings)
 
     for key in canvas_settings:
         setattr(pl, key, canvas_settings[key])
