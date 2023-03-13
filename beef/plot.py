@@ -91,7 +91,7 @@ def initialize_plot(canvas={}, view=None, cam={}, elements=None, title='BEEF Ele
 
     return view, canvas, view.camera
 
-def plot_elements(elements, overlay_deformed=False, sel_nodes=None, sel_elements=None, canvas={}, hold_on=False, view=None, cam={}, 
+def plot_elements_legacy(elements, overlay_deformed=False, sel_nodes=None, sel_elements=None, canvas={}, hold_on=False, view=None, cam={}, 
                   tmat_scaling=1, plot_tmat_ax=None, plot_nodes=False, node_labels=False, element_labels=False, element_label_settings={}, node_label_settings={}, 
                   element_settings={}, node_settings={}, sel_node_settings={}, sel_element_settings={}, sel_node_label_settings={}, sel_element_label_settings={}, 
                   tmat_settings={}, deformed_element_settings={}, title='BEEF Element plot', domain='3d',
@@ -503,7 +503,7 @@ def frame_creator(frames=30, repeats=1, swing=False, full_cycle=False):
 
 def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=None, el_opts={}, def_el_opts={}, node_opts={}, canvas_opts={},
                   show=True, plot_tmat_ax=[0,1,2], tmat_opts={}, tmat_scaling=10, tmat_on=[], val_fun=None,
-                  vals_on=['deformed'], colorbar_opts={}, clim=None, annotate_vals={}):
+                  vals_on=['deformed'], colorbar_opts={}, clim=None, annotate_vals={}, pl=None):
 
     if elements[0].domain == '2d':
         def conv_fun(xyz):
@@ -606,8 +606,10 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
 
     if vals is None:
         vals = [0]*len(elements)
-
-    pl = pv.Plotter()
+        
+    if pl is None:
+        pl = pv.Plotter()
+        
     mesh = generate_mesh(elements,'x0')
 
     if 'undeformed' in plot_states:

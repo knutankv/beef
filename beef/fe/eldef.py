@@ -416,7 +416,7 @@ class ElDef:
 
         '''
         if element_label in self.elements:
-            ix = np.where(self.element_labels()==element_label)[0][0].astype(int)
+            ix = np.where(self.element_labels().astype(int)==int(element_label))[0][0]
             return self.elements[ix]
         else:
             return None
