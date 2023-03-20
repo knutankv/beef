@@ -957,13 +957,12 @@ class BeamElement3d(BeamElement):
             self.update = self.update_nonlinear
         else:
             self.update = self.update_linear
-
+            
         self.initiate_nodes()
         self.update_geometry()
         self.T0 = self.Tn*1.0    #store initial transformation matrix
         
         self.update_m()
-        self.update_k()
     
 
     @property

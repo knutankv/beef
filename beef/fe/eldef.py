@@ -37,10 +37,10 @@ class ElDef:
 
     def __init__(self, nodes, elements, constraints=None, features=None, 
                  include_linear_kg=False, constraint_type='none', domain='3d', 
-                 assemble=True):
+                 assemble=True, forced_ndofs=None):
         self.nodes = nodes
         self.elements = elements
-        self.assign_node_dofcounts()
+        
         self.k, self.m, self.c, self.kg = None, None, None, None
         self.domain = domain
         self.dim = 2 if domain=='2d' else 3
@@ -75,13 +75,13 @@ class ElDef:
         if features is None:
             features = []
 
-        # Update global matrices and vectors
-        self.assign_node_dofcounts()
-        self.assign_global_dofs()
-
         # Establish features
         self.features = features
 
+        # Assign node dof counts and the resulting global DOFs
+        self.assign_node_dofcounts(n=forced_ndofs)        
+        self.assign_global_dofs()
+        
         if assemble:
             self.assemble()
             self.update_tangent_stiffness()
@@ -181,9 +181,8 @@ class ElDef:
 
         if constraint_type is None:
             constraint_type = self.constraint_type
-
-        self.assign_node_dofcounts() # ? 
-        self.assign_global_dofs()
+        self.update_all_elements()
+        
         self.ndim = np.sum(self.get_all_ndofs())
         self.m, self.c, self.k, self.kg = self.global_element_matrices(constraint_type=constraint_type)
         
@@ -220,18 +219,31 @@ class ElDef:
         for node in self.nodes:
             node.global_dofs = self.node_label_to_dof_ix(node.label)
         
-    def assign_node_dofcounts(self):
+    def assign_node_dofcounts(self, n=None):
         '''
         Assign node dof counts (`Node. ndofs`) for each node based on 
         current stacking in global system. Also update the field `all_ndofs`
-        in the `ElDef` object.
+        in the `ElDef` object. 
+        
+        TODO: Extend docs.
         '''
-        for node in self.nodes:
-            els = self.elements_with_node(node.label, return_node_ix=False)
-            if els != []:
-                node.ndofs = els[0].dofs_per_node
-            else:
-                node.ndofs = 0
+        if n is None:
+            for node in self.nodes:
+                els = self.elements_with_node(node.label, return_node_ix=False)
+                if els != []:
+                    node.ndofs = els[0].dofs_per_node
+                else:
+                    node.ndofs = 0
+        else: # node dof count not taken from element definition but forced based on input n
+            for node in self.nodes:
+                node.ndofs = n*1
+                node.u = np.zeros(n)
+
+                node.x0 = np.zeros(n)
+                node.x0[:node.dim+1] = node.coordinates
+                
+                node.x = node.x0*1
+ 
             
         self.all_ndofs = self.get_all_ndofs()
         
@@ -340,7 +352,7 @@ class ElDef:
         subset.assign_global_dofs()
         return subset
         
-    def get_element_subset(self, elements):
+    def get_element_subset(self, elements, reassign_dofs_and_nodes=True):
         '''
         Get a new `ElDef` as a subset from the current based on specified elements.
 
@@ -359,8 +371,11 @@ class ElDef:
         subset = copy(self)
         subset.elements = [element for element in self.elements if element in elements]
         subset.nodes = list(set([item for sublist in [el.nodes for el in subset.elements] for item in sublist]))
-        subset.assign_node_dofcounts()
-        subset.assign_global_dofs()
+        
+        if reassign_dofs_and_nodes:
+            subset.assign_node_dofcounts()
+            subset.assign_global_dofs()
+            
         return subset
 
     def get_elements_with_nodes(self, node_labels, return_only_labels=False):
@@ -500,6 +515,19 @@ class ElDef:
         for node in self.nodes:
             node.x0 = node.x*1  # make deformed structure new reference
     
+    def update_all_elements(self):
+        '''
+        Update all elements.
+        
+
+        Returns
+        -------
+        None.
+
+        '''
+        for element in self.elements:
+            element.update()
+    
     def deform(self, u, du=None, update_tangents=True):
         '''
         Deform `ElDef` specified u.
@@ -530,7 +558,27 @@ class ElDef:
 
         self.update_internal_forces()
 
-    def deform_linear(self, u):
+    def reset_deformation(self, only_deform=False):
+        '''
+        Deform `ElDef` specified u linearly, i.e., without updating geometry or any internal forces.
+
+        Arguments
+        ----------
+        u : float
+            array of displacements corresponding to global stacking of nodes and dofs
+
+        '''
+        for node in self.nodes:
+            node.du = node.du*0
+            node.u =  node.u*0
+            node.x = node.x0*1
+
+        if not only_deform:
+            for element in self.elements:
+                element.update_linear()    
+            
+
+    def deform_linear(self, u, only_deform=False):
         '''
         Deform `ElDef` specified u linearly, i.e., without updating geometry or any internal forces.
 
@@ -545,10 +593,11 @@ class ElDef:
             node.u = u[node.global_dofs]
             node.x = node.x0 + node.u
 
-        for element in self.elements:
-            element.update_linear()    
-
-        self.update_internal_forces(u)      # on part level (element internal forces are dealt with intristicly by update function above)
+        if not only_deform:
+            for element in self.elements:
+                element.update_linear()    
+            
+            self.update_internal_forces(u)      # on part level (element internal forces are dealt with intristicly by update function above)
     
 
     def update_all_geometry(self):
@@ -1015,6 +1064,7 @@ class Part(ElDef):
             element_types = ['beam']*element_matrix.shape[0] # assume that all are beam
 
         nodes, elements = create_nodes_and_elements(node_matrix, element_matrix, sections=sections, left_handed_csys=left_handed_csys, element_types=element_types)
+        
         if node_matrix.shape[1] == 3:
             domain = '2d'
         elif node_matrix.shape[1] == 4:
@@ -1046,7 +1096,8 @@ def create_nodes(node_matrix):
     
     return nodes
 
-def create_nodes_and_elements(node_matrix, element_matrix, sections=None, left_handed_csys=False, element_types=None):
+def create_nodes_and_elements(node_matrix, element_matrix, sections=None, 
+                              left_handed_csys=False, element_types=None):
     '''
     Create node list and element list from specified matrices.
 

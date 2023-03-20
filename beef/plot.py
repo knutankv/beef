@@ -199,6 +199,7 @@ def plot_elements_legacy(elements, overlay_deformed=False, sel_nodes=None, sel_e
     else:
         conv_fun = lambda xyz: xyz
     
+    
     # Settings
     invalid_color = np.array([0.8,0.8,0.8,0.2])
     
@@ -503,8 +504,9 @@ def frame_creator(frames=30, repeats=1, swing=False, full_cycle=False):
 
 def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=None, el_opts={}, def_el_opts={}, node_opts={}, canvas_opts={},
                   show=True, plot_tmat_ax=[0,1,2], tmat_opts={}, tmat_scaling=10, tmat_on=[], val_fun=None,
-                  vals_on=['deformed'], colorbar_opts={}, clim=None, annotate_vals={}, pl=None):
-
+                  vals_on=['deformed'], colorbar_opts={}, clim=None, annotate_vals={}, pl=None, node_labels=False, 
+                  element_labels=False, thickness_scaling=None):
+        
     if elements[0].domain == '2d':
         def conv_fun(xyz):
             if len(xyz)==2:
@@ -516,6 +518,14 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
     else:
         conv_fun = lambda xyz: xyz
 
+
+    def group_elements(els):
+        sections = list(set([el.section for el in els]))
+        grouped_els = {sec: [el for el in els if el.section==sec] for sec in sections}
+        
+        return grouped_els
+        
+        
     def generate_mesh(els, field='x', pad_size=2):
         # Coordinates of nodes
         nodes = list(set([a for b in [el.nodes for el in els] for a in b])) #flat list of unique nodes
@@ -588,8 +598,8 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
         cmap='viridis',
         show_scalar_bar=show_scalarbar['undeformed'],
         )
-    
 
+        
     node_settings = dict(
         render_points_as_spheres=True,
         color='magenta',
@@ -613,10 +623,25 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
     mesh = generate_mesh(elements,'x0')
 
     if 'undeformed' in plot_states:
-        pl.add_mesh(mesh,annotations=annotate_vals, scalar_bar_args=scalar_bar_settings, **el_settings )
+        if thickness_scaling is not None:
+            grouped_els = group_elements(elements)
+            lw0 = el_settings['line_width']*1.0
+            for sec in grouped_els:
+                el_settings['line_width'] = lw0*thickness_scaling(sec)
+                pl.add_mesh(generate_mesh(grouped_els[sec],'x0'), **el_settings)     
+        else:
+            pl.add_mesh(mesh, annotations=annotate_vals, scalar_bar_args=scalar_bar_settings, **el_settings)
 
     if 'deformed' in plot_states:
-        pl.add_mesh(generate_mesh(elements, 'x'),annotations=annotate_vals, scalar_bar_args=scalar_bar_settings, **def_el_settings)
+        if thickness_scaling is not None:
+            grouped_els = group_elements(elements)
+            lw0 = def_el_settings['line_width']*1.0
+            for sec in grouped_els:
+                print(sec)
+                def_el_settings['line_width'] = lw0*thickness_scaling(sec)
+                pl.add_mesh(generate_mesh(grouped_els[sec],'x'), **def_el_settings)     
+        else:
+            pl.add_mesh(generate_mesh(elements, 'x'), annotations=annotate_vals, scalar_bar_args=scalar_bar_settings, **def_el_settings)
     
     if plot_nodes:
         if 'undeformed' in plot_states:
@@ -624,6 +649,22 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
         if 'deformed' in plot_states:
             pl.add_points(generate_mesh(elements, 'x').extract_surface().points, **node_settings)
 
+    if node_labels:
+        nodes = list(set([a for b in [el.nodes for el in elements] for a in  b]))
+        lbl = [str(node.label) for node in nodes]
+        if 'deformed' in plot_states:
+            pl.add_point_labels(np.vstack([node.x[:3] for node in nodes]), lbl)
+        else:
+            pl.add_point_labels(np.vstack([node.x0[:3] for node in nodes]), lbl)            
+            
+    if element_labels:
+        lbl = [str(el.label) for el in elements]
+        if 'deformed' in plot_states:
+            pl.add_point_labels(np.vstack([el.get_cog(deformed=True) for el in elements]), lbl, text_color='blue', shape_color='white', shape_opacity=0.4)
+        else:
+            pl.add_point_labels(np.vstack([el.get_cog(deformed=False) for el in elements]), lbl, text_color='blue', shape_color='white', shape_opacity=0.4)            
+            
+        
     for key in canvas_settings:
         setattr(pl, key, canvas_settings[key])
 
