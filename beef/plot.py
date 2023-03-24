@@ -503,7 +503,7 @@ def frame_creator(frames=30, repeats=1, swing=False, full_cycle=False):
 
 
 def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=None, el_opts={}, def_el_opts={}, node_opts={}, canvas_opts={},
-                  show=True, plot_tmat_ax=[0,1,2], tmat_opts={}, tmat_scaling=10, tmat_on=[], val_fun=None,
+                  show=True, plot_tmat_ax=[1,2], tmat_opts={}, tmat_scaling=10, tmat_on=[], val_fun=None,
                   vals_on=['deformed'], colorbar_opts={}, clim=None, annotate_vals={}, pl=None, node_labels=False, 
                   element_labels=False, thickness_scaling=None):
         
@@ -637,7 +637,6 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
             grouped_els = group_elements(elements)
             lw0 = def_el_settings['line_width']*1.0
             for sec in grouped_els:
-                print(sec)
                 def_el_settings['line_width'] = lw0*thickness_scaling(sec)
                 pl.add_mesh(generate_mesh(grouped_els[sec],'x'), **def_el_settings)     
         else:

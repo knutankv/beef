@@ -91,7 +91,15 @@ class ElDef:
     # TODO: Currently use this patch for inclusion of nlfe2d - fix.
     def gdof_ix_from_nodelabels(self, node_labels, dof_ix):    
         return gdof_ix_from_nodelabels(self.get_node_labels(), node_labels, dof_ix=dof_ix)
+    
+    @property
+    def global_dofs(self):
+        '''
+        Array of global indices for all DOFS in all nodes.
+        '''
+        return np.hstack([node.global_dofs for node in self.nodes])
 
+    
     @property
     def ndofs(self):
         '''
@@ -234,6 +242,7 @@ class ElDef:
                     node.ndofs = els[0].dofs_per_node
                 else:
                     node.ndofs = 0
+                    
         else: # node dof count not taken from element definition but forced based on input n
             for node in self.nodes:
                 node.ndofs = n*1
@@ -351,8 +360,8 @@ class ElDef:
         subset.discard_unused_elements()
         subset.assign_global_dofs()
         return subset
-        
-    def get_element_subset(self, elements, reassign_dofs_and_nodes=True):
+    
+    def get_element_subset(self, elements, renumber=True):
         '''
         Get a new `ElDef` as a subset from the current based on specified elements.
 
@@ -360,6 +369,9 @@ class ElDef:
         -----------
         elements : Element obj
             list of `Element` objects to extract
+        renumber : True
+            if renumbering of global dofs and removal of nodes not connected to 
+            elements should be conducted
 
         Returns
         -----------
@@ -369,10 +381,10 @@ class ElDef:
         '''
 
         subset = copy(self)
-        subset.elements = [element for element in self.elements if element in elements]
+        subset.elements = [element for element in subset.elements if element in elements]
         subset.nodes = list(set([item for sublist in [el.nodes for el in subset.elements] for item in sublist]))
         
-        if reassign_dofs_and_nodes:
+        if renumber:
             subset.assign_node_dofcounts()
             subset.assign_global_dofs()
             

@@ -959,9 +959,7 @@ class BeamElement3d(BeamElement):
             self.update = self.update_linear
             
         self.initiate_nodes()
-        self.update_geometry()
-        self.T0 = self.Tn*1.0    #store initial transformation matrix
-        
+        self.initiate_geometry()        
         self.update_m()
     
 
@@ -1002,6 +1000,22 @@ class BeamElement3d(BeamElement):
         return self.Tn.T @ self.T0  #Equation 4.39 in Bruheim [4]
 
     # ------------- INITIALIZATION ----------------------
+    
+    def initiate_geometry(self):
+        '''
+        Initiate transformation matrices from specified 
+
+        Returns
+        -------
+        None.
+
+        '''
+        
+        self.update_geometry()
+        self.T0 = self.Tn*1.0    #store initial transformation matrix
+        
+        
+        
     def initiate_nodes(self):
         '''
         Initiate nodes of element.
