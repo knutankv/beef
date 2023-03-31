@@ -154,7 +154,7 @@ class BeamElement:
             axial force used to establish stiffness (if standard value
             None is used, N0 is assumed)
         '''
-
+   
         return self.tmat.T @ self.get_local_kg_axial(N=N) @ self.tmat
 
     def get_m(self):
@@ -725,7 +725,7 @@ class BeamElement2d(BeamElement):
         '''
         if N is None and self.N0 is not None:
             N = self.N0
-        else:
+        elif N is None:
             N = 0.0            
 
         L = self.L0
@@ -1447,7 +1447,7 @@ class BeamElement3d(BeamElement):
 
         if N is None and self.N0 is not None:
             N = self.N0
-        else:
+        elif N is None:
             N = 0.0
 
         L = self.L

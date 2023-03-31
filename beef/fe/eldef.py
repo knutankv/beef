@@ -168,7 +168,10 @@ class ElDef:
 
     def __repr__(self):
         return f'BEEF ElDef ({len(self.nodes)} nodes, {len(self.elements)} elements)'
-
+    
+    def copy(self):
+        return copy(self)
+    
     # ADDITIONAL
     def plot(self, **kwargs):       
         from ..plot import plot_elements 
@@ -226,6 +229,7 @@ class ElDef:
         '''
         for node in self.nodes:
             node.global_dofs = self.node_label_to_dof_ix(node.label)
+            node.index = self.nodes.index(node)
         
     def assign_node_dofcounts(self, n=None):
         '''
@@ -769,14 +773,14 @@ class ElDef:
         
         return t_mat
 
-    def get_kg(self, N=None):
+    def get_kg_axial(self, N=None):
         '''
         Establish linearized geometric stiffness from axial forces.
 
         Arguments
         ------------
         N : None, float
-            value of axial force applied; when defined as standard value None, `Node.N0` is used (`Node.N` is used if that is not specified).
+            value of axial force applied; when defined as standard value None, `Element.N0` is used (`Element.N` is used if that is not specified).
 
 
         Returns
@@ -790,13 +794,12 @@ class ElDef:
             if el.nodes[1].global_dofs is None:
                 print(el.nodes[1].global_dofs)  # temporarily added for quick debugging purposes
                 print(el.nodes[1])
-                
+
             glob_dofs = np.r_[el.nodes[0].global_dofs, el.nodes[1].global_dofs].astype(int)
             local_dofs = np.r_[0:el.nodes[0].ndofs, (el.nodes[0].ndofs):(el.nodes[0].ndofs + el.nodes[1].ndofs )]    #added for cases where one node in element is not present in self.nodes, check speed effect later
-
-            kg_eldef[np.ix_(glob_dofs, glob_dofs)] += el.get_kg(N=N)[np.ix_(local_dofs, local_dofs)]
+            kg_eldef[np.ix_(glob_dofs, glob_dofs)] += el.get_kg_axial(N=N)[np.ix_(local_dofs, local_dofs)]
             
-            if np.any(np.isnan(el.get_kg()[np.ix_(local_dofs, local_dofs)])):
+            if np.any(np.isnan(el.get_kg_axial()[np.ix_(local_dofs, local_dofs)])):
                 print(el)   # temporarily added for quick debugging purposes
                         
         return kg_eldef
