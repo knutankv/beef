@@ -49,12 +49,16 @@ class ElDef:
 
         if set([el.domain for el in self.elements]) != set([domain]):
             raise ValueError('Element domains has to match ElDef/Part/Assembly.')
-        
+
+        # Assign node dof counts and the resulting global DOFs
+        self.assign_node_dofcounts(n=forced_ndofs)        
+        self.assign_global_dofs()
+
         # Constraints
         self.constraints = constraints 
         self.constraint_type = constraint_type
 
-        # TODO: Currently use this patch for inclusion of nlfe2d - fix.
+        # TODO: for use with 2d
         self.dof_pairs = self.constraint_dof_ix()    
 
         if len(set(self.get_node_labels()))!=len(self.get_node_labels()):
@@ -66,22 +70,18 @@ class ElDef:
         else:
             self.B = None
             self.L = None   
+
         if self.dof_pairs is not None:
             self.constrained_dofs = self.dof_pairs[self.dof_pairs[:,1]==None, 0]
         else: 
             self.constrained_dofs = []
-        # self.unconstrained_dofs = np.delete(np.arange(0, np.shape(self.B)[1]), self.constrained_dofs)
-      
+
         if features is None:
             features = []
 
         # Establish features
         self.features = features
 
-        # Assign node dof counts and the resulting global DOFs
-        self.assign_node_dofcounts(n=forced_ndofs)        
-        self.assign_global_dofs()
-        
         if assemble:
             self.assemble()
             self.update_tangent_stiffness()

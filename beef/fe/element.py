@@ -1012,9 +1012,7 @@ class BeamElement3d(BeamElement):
         '''
         
         self.update_geometry()
-        self.T0 = self.Tn*1.0    #store initial transformation matrix
-        
-        
+        self.T0 = self.Tn*1.0    #store initial transformation matrix       
         
     def initiate_nodes(self):
         '''
@@ -1130,7 +1128,7 @@ class BeamElement3d(BeamElement):
         u_all = np.hstack([uA, rA, uB, rB])[np.newaxis, :].T 
 
         # Establish nodal forces in global frame of reference   
-        self.q = (self.get_k() @ u_all).flatten()   # Equation 4.51 in Bruheim [4]  (use get_k() because .k is transformed with previous T-mat)
+        self.q = (self.get_k() @ u_all).flatten()   # Equation 4.51 in Bruheim [4] (use get_k() because .k is transformed with previous T-mat)
         self.q_loc = self.tmat @ self.q   
 
     # ------------- FE CORE -------------------------------
@@ -1151,7 +1149,7 @@ class BeamElement3d(BeamElement):
 
         '''
         
-        return self.get_local_kd() + self.get_local_kg_axial(N=self.N)
+        return self.get_local_kd() + self.get_local_kg()
     
     def get_local_kg(self):
         '''
