@@ -1127,17 +1127,15 @@ class BeamElement3d(BeamElement):
 
         u_all = np.hstack([uA, rA, uB, rB])[np.newaxis, :].T 
 
-        # Establish nodal forces in global frame of reference   
-        self.q = (self.get_k() @ u_all).flatten()   # Equation 4.51 in Bruheim [4] (use get_k() because .k is transformed with previous T-mat)
+        # Establish nodal forces in global frame of reference  
+        k = self.tmat.T @ self.get_local_kd() @ self.tmat  
+        self.q = (k @ u_all).flatten()   # Equation 4.51 in Bruheim [4] (use get_k() because .k is transformed with previous T-mat)
         self.q_loc = self.tmat @ self.q   
 
     # ------------- FE CORE -------------------------------
     def get_local_k(self):
         '''
         Get local total stiffness matrix.
-
-        TODO: Currently, only axial forces are used to establish geometric stiffness as
-        the full matrix causes convergence issues.
 
         Returns
         -----------
@@ -1150,6 +1148,7 @@ class BeamElement3d(BeamElement):
         '''
         
         return self.get_local_kd() + self.get_local_kg()
+    
     
     def get_local_kg(self):
         '''
