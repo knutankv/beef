@@ -30,6 +30,7 @@ class Node:
         self.coordinates = np.array(coordinates)
         self.ndofs = ndofs                #number of dofs, normally defined later
         self.global_dofs = global_dofs    #global dofs, normally defined later
+        self.global_ix = None
 
         # Defined during element initialization
         self.x0 = None

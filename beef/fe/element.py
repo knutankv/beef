@@ -39,7 +39,7 @@ class BeamElement:
 
 
     # ------------- GEOMETRY AND PROPERTIES ---------------------------
-    def get_cog(self):
+    def get_cog(self, deformed=False):
         '''
         Get center of gravity coordinates of element.
 
@@ -49,7 +49,10 @@ class BeamElement:
             numpy array indicating the center of gravity of the element (2 or 3
             components based on dimensionality of system) 
         '''
-        return (self.nodes[0].coordinates + self.nodes[1].coordinates)/2
+        if deformed:
+            return (self.nodes[0].x[:self.dim] + self.nodes[1].x[:self.dim])/2
+        else:
+            return (self.nodes[0].coordinates + self.nodes[1].coordinates)/2
 
 
     def get_vec(self, undeformed=False):
@@ -151,7 +154,7 @@ class BeamElement:
             axial force used to establish stiffness (if standard value
             None is used, N0 is assumed)
         '''
-
+   
         return self.tmat.T @ self.get_local_kg_axial(N=N) @ self.tmat
 
     def get_m(self):
@@ -241,6 +244,14 @@ class BeamElement:
         return elements
     
 
+    # Transformation and rotation tensor dynamic properties
+    @property
+    def Tn(self):
+        '''
+        Current transformation matrix.
+        '''
+        return self.tmat[:self.dim, :self.dim]
+
 class BeamElement2d(BeamElement):
     '''
     Two-dimensional beam element class.
@@ -307,6 +318,7 @@ class BeamElement2d(BeamElement):
         self.update_geometry()
         self.update_m()
         self.update()   
+        self.T0 = self.Tn*1     # initial transformation matrices
 
 
     # ---------- DYNAMIC PROPERTIES ------------------
@@ -713,7 +725,7 @@ class BeamElement2d(BeamElement):
         '''
         if N is None and self.N0 is not None:
             N = self.N0
-        else:
+        elif N is None:
             N = 0.0            
 
         L = self.L0
@@ -945,13 +957,10 @@ class BeamElement3d(BeamElement):
             self.update = self.update_nonlinear
         else:
             self.update = self.update_linear
-
+            
         self.initiate_nodes()
-        self.update_geometry()
-        self.T0 = self.Tn*1.0    #store initial transformation matrix
-        
+        self.initiate_geometry()        
         self.update_m()
-        self.update_k()
     
 
     @property
@@ -982,14 +991,6 @@ class BeamElement3d(BeamElement):
     @property
     def Qz(self):
         return (self.q_loc[4+6] + self.q_loc[4])/self.L
-
-    # Transformation and rotation tensor dynamic properties
-    @property
-    def Tn(self):
-        '''
-        Current transformation matrix.
-        '''
-        return self.tmat[:3, :3]
     
     @property
     def R0n(self):
@@ -999,6 +1000,20 @@ class BeamElement3d(BeamElement):
         return self.Tn.T @ self.T0  #Equation 4.39 in Bruheim [4]
 
     # ------------- INITIALIZATION ----------------------
+    
+    def initiate_geometry(self):
+        '''
+        Initiate transformation matrices from specified 
+
+        Returns
+        -------
+        None.
+
+        '''
+        
+        self.update_geometry()
+        self.T0 = self.Tn*1.0    #store initial transformation matrix       
+        
     def initiate_nodes(self):
         '''
         Initiate nodes of element.
@@ -1112,17 +1127,15 @@ class BeamElement3d(BeamElement):
 
         u_all = np.hstack([uA, rA, uB, rB])[np.newaxis, :].T 
 
-        # Establish nodal forces in global frame of reference   
-        self.q = (self.get_k() @ u_all).flatten()   # Equation 4.51 in Bruheim [4]  (use get_k() because .k is transformed with previous T-mat)
+        # Establish nodal forces in global frame of reference  
+        k = self.tmat.T @ self.get_local_kd() @ self.tmat  
+        self.q = (k @ u_all).flatten()   # Equation 4.51 in Bruheim [4] (use get_k() because .k is transformed with previous T-mat)
         self.q_loc = self.tmat @ self.q   
 
     # ------------- FE CORE -------------------------------
     def get_local_k(self):
         '''
         Get local total stiffness matrix.
-
-        TODO: Currently, only axial forces are used to establish geometric stiffness as
-        the full matrix causes convergence issues.
 
         Returns
         -----------
@@ -1134,7 +1147,8 @@ class BeamElement3d(BeamElement):
 
         '''
         
-        return self.get_local_kd() + self.get_local_kg_axial(N=self.N)
+        return self.get_local_kd() + self.get_local_kg()
+    
     
     def get_local_kg(self):
         '''
@@ -1430,7 +1444,7 @@ class BeamElement3d(BeamElement):
 
         if N is None and self.N0 is not None:
             N = self.N0
-        else:
+        elif N is None:
             N = 0.0
 
         L = self.L

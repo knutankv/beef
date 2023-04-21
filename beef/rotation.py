@@ -4,6 +4,44 @@ Quaternion  and tensor rotations.
 
 import numpy as np
 
+def rodrot(theta, rotaxis=[0, 0, 1], style='row'):
+    """
+    Establishes 3D rotation matrix based on Euler-Rodrigues formula.
+    See https://en.wikipedia.org/wiki/Euler-Rodrigues_formula.
+
+
+    Arguments
+    -------------
+        theta : float
+            the rotation angle (in radians)
+        rotaxis : [0, 0, 1]
+            vector defining rotation axis
+        style : 'row'
+            unit vectors as stacked as 'row' or 'column'
+
+    Returns
+    -----------
+        T : float
+            transformation matrix in NumPy format
+
+    """
+
+    axis = np.asarray(rotaxis)
+    axis = rotaxis/np.sqrt(np.dot(rotaxis, rotaxis))    # Normalize
+    a = np.cos(theta/2.0)
+    b, c, d = axis*np.sin(theta/2.0)
+    a2, b2, c2, d2 = a*a, b*b, c*c, d*d
+    bc, ad, ac, ab, bd, cd = b*c, a*d, a*c, a*b, b*d, c*d
+    T = np.array([[a2+b2-c2-d2, 2*(bc-ad), 2*(bd+ac)],
+                  [2*(bc+ad), a2+c2-b2-d2, 2*(cd-ab)],
+                  [2*(bd-ac), 2*(cd+ab), a2+d2-b2-c2]])
+    
+    if style=='row':
+        T = T.T
+    
+    return T
+
+
 def rot_from_R(R):
     '''
     Calculate rotation vector from (deformation part of) rotation tensor.

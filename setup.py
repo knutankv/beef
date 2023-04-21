@@ -21,7 +21,8 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/knutankv/beef",
     packages=setuptools.find_packages(),
-    install_requires=['scipy', 'numpy', 'matplotlib', 'vispy', 'tqdm', 'PyQt5'],
+    install_requires=['scipy', 'numpy', 'matplotlib', 'vispy', 'tqdm', 'PyQt5',
+                      'pyvista>=0.38.1', 'trame'],    
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
