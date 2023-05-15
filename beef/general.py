@@ -593,3 +593,23 @@ def feature_matrix(master_dofs, values, slave_dofs=None, ndofs=None, return_smal
 
 def basic_coupled():
     return np.array([[1, -1], [-1, 1]])
+
+
+def bar_foundation_stiffness(L, kx, ky, kz):    #only z and y currently, will be extended!
+    mat = np.vstack([ 
+        [kx*1/4, 0, 0, 0, 0, 0,     kx*1/4, 0, 0, 0, 0, 0],     #ux1
+        [0, ky*1/3, 0, 0, 0, 0,     0, ky*1/6, 0, 0, 0, 0],     #uy1
+        [0, 0, kz*1/3, 0, 0, 0,     0, 0, kz*1/6, 0, 0, 0],     #uz1
+
+        [0, 0, 0, 0, 0, 0,          0, 0, 0, 0, 0, 0],          #rx1
+        [0, 0, 0, 0, 0, 0,          0, 0, 0, 0, 0, 0],          #ry1
+        [0, 0, 0, 0, 0, 0,          0, 0, 0, 0, 0, 0],          #rz1
+
+        [kx*1/4, 0, 0, 0, 0, 0,     kx*1/4, 0, 0, 0, 0, 0],     #ux2
+        [0, ky*1/6, 0, 0, 0, 0,     0, ky*1/3, 0, 0, 0, 0],     #uy2
+        [0, 0, kz*1/6, 0, 0, 0,     0, 0, kz*1/3, 0, 0, 0],     #uz2
+
+        [0, 0, 0, 0, 0, 0,          0, 0, 0, 0, 0, 0],          #rx2
+        [0, 0, 0, 0, 0, 0,          0, 0, 0, 0, 0, 0],          #ry2
+        [0, 0, 0, 0, 0, 0,          0, 0, 0, 0, 0, 0]]) * L      #rz2
+    return mat
