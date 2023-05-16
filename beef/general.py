@@ -594,6 +594,47 @@ def feature_matrix(master_dofs, values, slave_dofs=None, ndofs=None, return_smal
 def basic_coupled():
     return np.array([[1, -1], [-1, 1]])
 
+def generic_beam_mat(L, yy=0, yz=0, yt=0, zy=0, zz=0, zt=0, ty=0, tz=0, tt=0):
+    mat = np.zeros([12,12])
+
+    mat[0:6, 0:6] = np.array([
+        [0,         0,          0,          0,          0,              0           ],
+        [0,         156*yy,    156*yz,    147*yt,    -22*L*yz,      22*L*yy    ],
+        [0,         156*zy,    156*zz,    147*zt,    -22*L*zz,      22*L*zy    ],
+        [0,         147*ty,    147*tz,    140*tt,     -21*L*tz,      21*L*ty   ],
+        [0,         -22*L*zy,  -22*L*zz,  -21*L*zt,  4*L**2*zz,     -4*L**2*zy ],
+        [0,         22*L*yy,   22*L*yz,   21*L*yt,   -4*L**2*yz,    4*L**2*yy  ],
+    ])
+
+    mat[0:6, 6:12] = np.array([
+        [0,         0,          0,          0,          0,              0            ],
+        [0,         54*yy,    54*yz,      63*yt,     13*L*yz,       -13*L*yy    ],
+        [0,         54*zy,    54*zz,      63*zt,     13*L*zz,       -13*L*zy    ],
+        [0,         63*ty,    63*tz,      70*tt,     14*L*tz,       -14*L*ty    ],
+        [0,         -13*L*zy,  -13*L*zz,  -14*L*zt,  -3*L**2*zz,     3*L**2*zy  ],
+        [0,         13*L*yy,   13*L*yz,   14*L*yt,   3*L**2*yz,     -3*L**2*yy  ],
+    ])
+
+    mat[6:12, 0:6] = np.array([
+        [0,         0,          0,          0,          0,              0            ],
+        [0,         54*yy,    54*yz,      63*yt,     -13*L*yz,       13*L*yy    ],
+        [0,         54*zy,    54*zz,      63*zt,     -13*L*zz,       13*L*zy    ],
+        [0,         63*ty,    63*tz,      70*tt,     -14*L*tz,       14*L*ty    ],
+        [0,         13*L*zy,  13*L*zz,    14*L*zt,   -3*L**2*zz,     3*L**2*zy  ],
+        [0,         -13*L*yy, -13*L*yz,   -14*L*yt,   3*L**2*yz,     -3*L**2*yy ],
+    ])
+
+    mat[6:12,6:12] = np.array([
+        [0,         0,          0,          0,          0,              0               ],
+        [0,         156*yy,    156*yz,    147*yt,    22*L*yz,      -22*L*yy        ],
+        [0,         156*zy,    156*zz,    147*zt,    22*L*zz,      -22*L*zy        ],
+        [0,         147*ty,    147*tz,    140*tt,    21*L*tz,      -21*L*ty        ],
+        [0,         22*L*zy,   22*L*zz,   21*L*zt,    4*L**2*zz,   -4*L**2*zy      ],
+        [0,         -22*L*yy,   -22*L*yz,   -21*L*yt,   -4*L**2*yz,    4*L**2*yy   ],
+    ])
+
+    return mat * L / 420
+
 
 def bar_foundation_stiffness(L, kx, ky, kz):    #only z and y currently, will be extended!
     mat = np.vstack([ 
