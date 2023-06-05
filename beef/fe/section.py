@@ -108,6 +108,6 @@ class Section:
 
         '''        
         if self.G is None:
-            return self.E/(2*self.poisson+1)
+            return self.E/(2*(self.poisson+1))
         else:
             return self.G
