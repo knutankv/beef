@@ -34,8 +34,8 @@ class Feature:
     $$[K]_{i,i} = k $$
     
     '''
-    def __init__(self, node_labels, dofs, value, local=False, name=None):
-        
+    def __init__(self, feature_type, node_labels, dofs, value, local=False, name=None):
+
         if len(node_labels) == 1 or node_labels[1]==None:
             matrix = basic_coupled()[0:1, 0:1]*value
             node_labels = [node_labels[0]]
@@ -48,6 +48,7 @@ class Feature:
         self.matrix = matrix
         self.local = local
         self.name = name
+        self.type = feature_type
 
     # CORE METHODS
     def __str__(self):
