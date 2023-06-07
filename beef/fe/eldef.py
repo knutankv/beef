@@ -106,7 +106,31 @@ class ElDef:
         Number of nodes in `ElDef`.
         '''
         return np.sum([node.ndofs for node in self.nodes])
+    
 
+    def get_global_dofs(self, nodelabels):
+        '''
+        Returns array of all global dofs of input nodelabels.
+        
+        Arguments 
+        -------------
+        nodelabels : int
+            list of node labels to return global dofs from
+
+        Returns
+        ----------
+        global_dofs : int
+            list of global dofs for node labels input, in order corresponding
+            to the order of the input node labels
+        '''
+
+        global_dofs = np.hstack([self.get_node(nl).global_dofs for nl in nodelabels])
+        return global_dofs
+
+    def get_feature_mat(self, feature):
+        # tmat = feature.T
+        # return tmat.T @ feature.matrix @ tmat.T
+        return feature.matrix
 
     def get_feature_mats(self, mats=['k', 'c', 'm']):
         '''
@@ -130,9 +154,8 @@ class ElDef:
 
         for feature in self.features:
             if feature.type in mats:
-                for dof_ix in feature.dofs:
-                    ixs = np.array([self.node_dof_lookup(nl, dof_ix=dof_ix) for nl in feature.node_labels]).flatten()
-                    feature_mats[feature.type][np.ix_(ixs, ixs)] = feature.matrix
+                ixs = self.get_global_dofs(feature.node_labels)[feature.dofs]
+                feature_mats[feature.type][np.ix_(ixs, ixs)] += self.get_feature_mat(feature)
 
         feature_list = [feature_mats[key] for key in mats]  # return as list with same order as input
 
@@ -659,16 +682,32 @@ class ElDef:
             
 
     # GET METHODS
-    def get_sections(self):
+    def get_sec(self, *sec):
         '''
-        Get list of unique `Section` objects present in ElDef.
+        Get `Section` object or list of `Section` objects present in ElDef (all or with specified names).
+
+        Arguments
+        ----------
+        sec : None, optional
+            of not specified, None is used which enforces all sections
+
+        
         '''
-        sections = []
+        sec_obj = []
         
         for el in self.elements:
-            if el.section not in sections: sections.append(el.section)
+            if el.section not in sec_obj: sec_obj.append(el.section)
+
+        if len(sec)!=0:
+            sec_obj = [s for s in sec_obj if s.name in sec]
         
-        return sections
+        if len(sec_obj)==1:
+            sec_obj = sec_obj[0]
+        
+        return sec_obj
+    
+    def get_els_with_sec(self, sec):
+        return [el for el in self.elements if el.section.name in sec]
     
     def get_tmats(self):
         '''
