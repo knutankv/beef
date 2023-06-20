@@ -55,7 +55,7 @@ class Analysis:
     def __init__(self, eldef, forces=None, prescribed_N=None, prescribed_displacements=None, 
         tmax=1, dt=1, itmax=10, t0=0, tol=None, nr_modified=False, 
         newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, 
-        tol_fun=np.linalg.norm):
+        tol_fun=np.linalg.norm, show_warnings=True):
 
         if forces is None:
             forces = []
@@ -86,7 +86,7 @@ class Analysis:
             else:
                 this_dt = np.diff(self.t)[0]
 
-            if (this_dt-min_dt)>np.finfo(np.float32).eps:
+            if (this_dt-min_dt)>np.finfo(np.float32).eps and show_warnings:
                 print(f'A time increment ({this_dt}) larger than the lowest used for force definitions ({min_dt}) is specified. Interpret results with caution!')
   
         # Tolerance dictionary update (add only specified values, otherwise keep as None)

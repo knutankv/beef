@@ -3,7 +3,8 @@ FE objects submodule: engineering features definitions
 '''
 
 from beef import basic_coupled
-import numpy as np
+
+ 
 
 class Feature:
     '''
@@ -56,6 +57,15 @@ class Feature:
 
     def __repr__(self):
         return f'BEEF Feature: {self.name}'
+
+class CustomMatrix(Feature):
+    def __init__(self, feature_type, node_label, matrix, local=False, name=None):
+        self.node_labels = [node_label]
+        self.matrix = matrix
+        self.local = local
+        self.name = name
+        self.type = feature_type  
+        self.dofs = None
 
 class Spring(Feature):
     def __init__(self, node_labels, dofs, k, **kwargs):

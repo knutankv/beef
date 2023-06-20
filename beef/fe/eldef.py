@@ -124,7 +124,7 @@ class ElDef:
             to the order of the input node labels
         '''
 
-        global_dofs = np.hstack([self.get_node(nl).global_dofs for nl in nodelabels])
+        global_dofs = np.hstack([self.get_node(nl).global_dofs for nl in nodelabels]).flatten()
         return global_dofs
 
     def get_feature_mat(self, feature):
@@ -154,7 +154,7 @@ class ElDef:
 
         for feature in self.features:
             if feature.type in mats:
-                ixs = self.get_global_dofs(feature.node_labels)[feature.dofs]
+                ixs = self.get_global_dofs(feature.node_labels)[feature.dofs].flatten()
                 feature_mats[feature.type][np.ix_(ixs, ixs)] += self.get_feature_mat(feature)
 
         feature_list = [feature_mats[key] for key in mats]  # return as list with same order as input
