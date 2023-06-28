@@ -13,7 +13,7 @@ BEEF is a BEam Elements Framework package for Python. The main features are:
 
 setuptools.setup(
     name="beef-knutankv",
-    version="0.4.1",
+    version="0.3.1",
     author="Knut Andreas Kvåle",
     author_email="knut.a.kvale@gmail.com",
     description="BEam Elements Framework for Python.",
@@ -21,8 +21,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/knutankv/beef",
     packages=setuptools.find_packages(),
-    install_requires=['scipy', 'numpy', 'matplotlib', 'vispy', 'tqdm', 'PyQt5',
-                      'pyvista>=0.38.1', 'trame'],    
+    install_requires=['scipy', 'numpy', 'matplotlib', 'tqdm', 'trame'],    
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
