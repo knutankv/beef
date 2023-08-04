@@ -213,7 +213,7 @@ class BeamElement:
     def ndofs(self):
         return self.nodes[0].ndofs + self.nodes[1].ndofs
 
-    def subdivide(self, n):
+    def subdivide(self, n, shared_mid_nodes=True):
         '''
         Divide element into n elements.
 
@@ -221,6 +221,8 @@ class BeamElement:
         -----------
         n : int
             number of divisions/resulting elements
+        shared_mid_node : {True, False}
+            whether or not to share nodes of elements joined on middle of element
             
         Returns
         -------------
@@ -232,15 +234,24 @@ class BeamElement:
         elements = [None]*n
         x0 = self.nodes[0].coordinates
         x1 = self.nodes[1].coordinates
-        v = x1-x0
+        dv = x1-x0
         
         for el in range(n):
             elements[el] = deepcopy(self)
-            elements[el].nodes[0].coordinates = x0+v*1/n*el
-            elements[el].nodes[1].coordinates = x0+v*1/n*(el+1)
+            elements[el].nodes[0].coordinates = x0+dv*1/n*el
+            elements[el].nodes[1].coordinates = x0+dv*1/n*(el+1)
+            elements[el].L0 = elements[el].get_length(undeformed=True)
             
             elements[el].initiate_nodes()
         
+        if shared_mid_nodes:
+            n_max = elements[0].nodes[1].label
+            for el, element in enumerate(elements[1:]):
+                element.nodes[0] = elements[el-1+1].nodes[1]
+            
+            for el,element in enumerate(elements[:-1]):
+                element.nodes[1].label = n_max + el + 1
+                
         return elements
     
 
@@ -466,7 +477,6 @@ class BeamElement2d(BeamElement):
         '''
         k_local = np.zeros([6,6])
         section = self.section
-
 
         k_local[:3, :3] = (1/self.L**3) * np.array([[section.E*section.A*self.L**2,-self.Q*self.L**2, 0],
                                   [-self.Q*self.L**2, 12*self.psi*section.E*section.I[0]+6/5*self.N*self.L**2, 6*self.psi*section.E*section.I[0]*self.L+1/10*self.N*self.L**3],

@@ -75,6 +75,7 @@ class Analysis:
 
         # TODO: treat prescribed displacements
         # self.dof_pairs = np.vstack([self.eldef.dof_pairs, self.get_dof_pairs_from_prescribed_displacements()])
+
         self.dof_pairs = self.eldef.dof_pairs
         self.Linv = dof_pairs_to_Linv(self.dof_pairs, len(self.eldef.nodes)*(self.eldef.dim-1)*3)
         
@@ -305,7 +306,7 @@ class Analysis:
             return self.u
 
 
-    def run_lin_dynamic(self, solver='full_hht', print_progress=True, return_results=False):
+    def run_lin_dynamic(self, solver='lin', print_progress=True, return_results=False):
         '''
         Run dynamic (linear) solution, using parameters and element definition specified in parent Analysis object.
 
@@ -430,32 +431,28 @@ class Analysis:
             eigenvectors (stacked as columns) from analysis
         '''
 
-        M, C, K, __ = self.eldef.global_element_matrices(constraint_type='primal')
+        M, C, K, __ = self.eldef.get_element_matrices(constraint_type='primal')
         C = C + M*self.rayleigh['mass'] + K*self.rayleigh['stiffness']  # Rayleigh damping
 
         A = statespace(K, C, M)
         lambd, phi = np.linalg.eig(A)
-        
+
+        if ~return_complex:
+            phi = np.real(maxreal(phi))
+
+        if not return_full:
+            __, ix = np.unique(np.abs(lambd), return_index=True)
+            n_dofs = M.shape[0]
+            phi = self.eldef.L @ phi[:n_dofs, ix]
+            lambd = lambd[ix]
+
         if normalize_modes:
             n_dofs = 6 if self.eldef.domain == '3d' else 3
             include_dofs = [0,1,2] if self.eldef.domain == '3d' else [0,1]
             phi = normalize_phi(phi, include_dofs=include_dofs, n_dofs=n_dofs)
 
-        if return_full:
-            return lambd, phi
-        else:
-            __, ix = np.unique(np.abs(lambd), return_index=True)
-            n_dofs = M.shape[0]
-            phi = self.eldef.L @ phi[:n_dofs, ix]
-            lambd = lambd[ix]
-            
-                
-            if ~return_complex:
-                phi = maxreal(phi)
-                phi = np.real(phi)
-
         return lambd, phi
-    
+
 
     def run_static(self, print_progress=True, return_results=False):
         '''

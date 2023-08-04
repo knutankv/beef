@@ -5,7 +5,7 @@ General purpose functions.
 import numpy as np
 from scipy.linalg import null_space as null
 
-#%% General functions
+
 def n2d_ix(node_ixs, n_dofs=6):
     '''
     Convert node indices to dof indices.

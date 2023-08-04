@@ -202,9 +202,9 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
     if element_labels:
         lbl = [str(el.label) for el in elements]
         if 'deformed' in plot_states:
-            pl.add_point_labels(np.vstack([el.get_cog(deformed=True) for el in elements]), lbl, text_color='blue', shape_color='white', shape_opacity=0.4)
+            pl.add_point_labels(np.vstack([conv_fun(el.get_cog(deformed=True)) for el in elements]), lbl, text_color='blue', shape_color='white', shape_opacity=0.4)
         else:
-            pl.add_point_labels(np.vstack([el.get_cog(deformed=False) for el in elements]), lbl, text_color='blue', shape_color='white', shape_opacity=0.4)            
+            pl.add_point_labels(np.vstack([conv_fun(el.get_cog(deformed=False)) for el in elements]), lbl, text_color='blue', shape_color='white', shape_opacity=0.4)            
             
         
     for key in canvas_settings:
