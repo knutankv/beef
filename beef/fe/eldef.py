@@ -97,6 +97,20 @@ class ElDef:
 
 
     @property
+    def vel(self):
+        '''
+        All velocities of nodes
+        '''
+        return np.hstack([node.vel for node in self.nodes])
+    
+    @property
+    def u(self):
+        '''
+        All displacements of nodes
+        '''
+        return np.hstack([node.u for node in self.nodes])
+
+    @property
     def global_dofs(self):
         '''
         Array of global indices for all DOFS in all nodes.
@@ -165,6 +179,12 @@ class ElDef:
         self.assign_global_dofs()
         self.assemble(update_all=True)
 
+
+    def get_feature(self, name):
+        valid_features = [f for f in self.features if f.name==name]
+        return valid_features
+        
+        
     def get_feature_mat(self, feature):
         # tmat = feature.T
         # return tmat.T @ feature.matrix @ tmat.T
@@ -177,7 +197,7 @@ class ElDef:
         Arguments 
         -------------
         mats : str
-            list where the three values 'k', 'c', and 'm' are allowed, 
+            list where the three values 'k', 'c', 'cquad', and 'm' are allowed, 
             specifying what matrices to establish
 
         Returns
@@ -259,9 +279,9 @@ class ElDef:
         self.update_all_elements()
 
         if update_all:
-            self.update_tangent_stiffness()
+            self.update_k()
             self.update_internal_forces()
-            self.update_mass_matrix() 
+            self.update_m() 
 
         self.ndim = np.sum(self.get_all_ndofs())
         self.m, self.c, self.k, self.kg = self.get_element_matrices(constraint_type=constraint_type)
@@ -613,7 +633,8 @@ class ElDef:
         for element in self.elements:
             element.update()
     
-    def deform(self, u, du=None, update_tangents=True):
+    
+    def deform(self, u, vel=None, du=None, update_tangents=True):
         '''
         Deform `ElDef` specified u.
 
@@ -621,10 +642,18 @@ class ElDef:
         ----------
         u : float
             array of displacements corresponding to global stacking of nodes and dofs
+        vel : None, float
+            array of velocities corresponding to global stacking of nodes and dofs
+        du : float
+            displacement from last increment, used for corotational element analysis
         update_tangents : True
             whether or not to update the tangent stiffness resulting from the deformation (relevant in corotational formulation)
 
         '''
+
+        if vel is None:
+            vel = np.array([0]*len(u))
+
         for node in self.nodes:
             if du is None:
                 node.du = u[node.global_dofs] - node.u
@@ -632,14 +661,15 @@ class ElDef:
                 node.du = du[node.global_dofs]
 
             node.u = u[node.global_dofs]
+            node.vel = vel[node.global_dofs]
             node.x = node.x0 + node.u
             node.increment_rotation_tensor()
-
+        
         for element in self.elements:
             element.update()
-
+    
         if update_tangents:
-            self.update_tangent_stiffness()
+            self.update_k()
 
         self.update_internal_forces()
 
@@ -706,12 +736,23 @@ class ElDef:
         if u is None:
             u = np.zeros([self.ndofs])
         
-        self.q = self.get_feature_mats(mats=['k']) @ u 
+        self.q = (self.get_feature_mats(mats=['k']) @ u) *0     #PATCH - assess validity!
 
         for el in self.elements:
             self.q[el.global_dofs] += el.q
 
-    def update_tangent_stiffness(self):
+    def update_c(self, include_quadratic=True):
+        '''
+        Update damping matrix, from damping features
+        '''
+
+        self.c = self.get_feature_mats(mats=['c'])
+        
+        if include_quadratic:
+            self.c = self.c + self.get_feature_mats(mats=['cquad']) * np.diag(np.abs(self.vel))
+
+
+    def update_k(self):
         '''
         Update tangent stiffness based on current state.
         '''
@@ -721,7 +762,7 @@ class ElDef:
             self.k[np.ix_(el.global_dofs, el.global_dofs)] += el.k
 
     
-    def update_mass_matrix(self):
+    def update_m(self):
         '''
         Update mass matrix based on current state.
         '''

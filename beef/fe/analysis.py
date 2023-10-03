@@ -50,12 +50,14 @@ class Analysis:
         dictionary specifying stiffness and mass proportional damping
     tol_fun : np.linalg.norm
         function to apply for tolerance checks
+    include_quadratic : False
+        whether or not to include quadratic damping features
     '''
 
     def __init__(self, eldef, forces=None, prescribed_N=None, prescribed_displacements=None, 
         tmax=1, dt=1, itmax=10, t0=0, tol=None, nr_modified=False, 
         newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, 
-        tol_fun=np.linalg.norm, show_warnings=True):
+        tol_fun=np.linalg.norm, show_warnings=True, include_quadratic=False):
 
         if forces is None:
             forces = []
@@ -69,6 +71,7 @@ class Analysis:
         self.t = np.arange(t0, tmax+dt, dt)
         self.itmax = itmax
         self.prescribed_N = prescribed_N
+        self.include_quadratic = False
 
         if 'alpha' not in newmark_factors:
             newmark_factors['alpha'] = 0.0
@@ -245,7 +248,13 @@ class Analysis:
             u, udot, uddot, du = newmark.pred(u, udot, uddot, dt)
             
             # Deform part
-            self.eldef.deform(L @ u)    # deform nodes in part given by u => new f_int and K from elements
+            if self.include_quadratic:
+                self.eldef.deform(L @ u, vel=L @ udot)
+                self.eldef.update_c(include_quadratic=True)
+            else:
+                self.eldef.deform(L @ u)    # deform nodes in part given by u => new f_int and K from elements
+            
+
             du_inc = u*0
 
             # Calculate internal forces and residual force
@@ -431,7 +440,11 @@ class Analysis:
             eigenvectors (stacked as columns) from analysis
         '''
 
-        M, C, K, __ = self.eldef.get_element_matrices(constraint_type='primal')
+        M, C, K, Kg = self.eldef.get_element_matrices(constraint_type='primal')
+        
+        if self.eldef.include_linear_kg:
+            K = K + Kg
+        
         C = C + M*self.rayleigh['mass'] + K*self.rayleigh['stiffness']  # Rayleigh damping
 
         A = statespace(K, C, M)
@@ -588,3 +601,4 @@ class Analysis:
 
         if return_results:
             return self.u
+

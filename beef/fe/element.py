@@ -180,7 +180,7 @@ class BeamElement:
 
     def update_k(self):
         '''
-        Update global stiffness matrix of element based on local current mass matrix.
+        Update global stiffness matrix of element based on local current stiffness matrix.
         '''
 
         self.k = self.tmat.T @ self.get_local_k() @ self.tmat
@@ -475,6 +475,7 @@ class BeamElement2d(BeamElement):
         [[1]](../#1) Krenk, 2009.
 
         '''
+        
         k_local = np.zeros([6,6])
         section = self.section
 
