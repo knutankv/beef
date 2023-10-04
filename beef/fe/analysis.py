@@ -71,7 +71,7 @@ class Analysis:
         self.t = np.arange(t0, tmax+dt, dt)
         self.itmax = itmax
         self.prescribed_N = prescribed_N
-        self.include_quadratic = False
+        self.include_quadratic = include_quadratic
 
         if 'alpha' not in newmark_factors:
             newmark_factors['alpha'] = 0.0
@@ -101,6 +101,12 @@ class Analysis:
         tol0.update(**tol)
         self.tol = tol0
         
+        # Assign initial prescribed N
+        if prescribed_N is not None:
+            N = self.prescribed_N(0)
+            for ix, el in enumerate(self.eldef.elements):
+                el.N0 = N[ix]
+            
         self.run_all_iterations = all(v is None for v in tol.values())
         self.newmark_factors = newmark_factors
         self.nr_modified = nr_modified

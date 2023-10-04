@@ -118,7 +118,7 @@ def convert_dofs_list(dofs_list_in, n_nodes, node_type='beam3d', sort_output=Tru
     return dofs_list_out
 
 
-def transform_unit(e1, e2p):
+def transform_unit(e1, e2p, warnings=False):
     '''
     Establish transformation matrix from e1 and temporary e2 vectors.
 
@@ -166,6 +166,13 @@ def transform_unit(e1, e2p):
     e2p = np.array(e2p).flatten()
     
     e3 = np.cross(e1, e2p)         # Direction of the third unit vector
+    
+    if np.all(e3==0):
+        if warnings:
+            print('Warning: e1 and e2 identical. Check orientations carefully!')
+        e2p = e2p + 0.1
+        e3 = np.cross(e1, e2p) 
+    
     e2 = np.cross(e3, e1)          # Direction of the second unit vector
 
     e1 = e1/np.linalg.norm(e1)     # Normalize the direction vectors to become unit vectors

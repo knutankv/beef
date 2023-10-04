@@ -6,6 +6,7 @@ import numpy as np
 from .node import *
 from .element import *
 from .section import *
+from .constraint import *
 from scipy.linalg import null_space as null
 from ..general import ensure_list, compatibility_matrix as compmat, lagrange_constrain, gdof_ix_from_nodelabels
 from ..modal import statespace
@@ -124,6 +125,13 @@ class ElDef:
         Number of nodes in `ElDef`.
         '''
         return np.sum([node.ndofs for node in self.nodes])
+    
+    @property
+    def coordinates(self):
+        '''
+        Array with all coordinates - rows contain coordinates of each node as ordered.
+        '''
+        return np.vstack([node.coordinates for node in self.nodes])
     
 
     def get_global_dofs(self, nodelabels):
@@ -254,9 +262,13 @@ class ElDef:
         return copy(self)
     
     # ADDITIONAL
-    def plot(self, **kwargs):       
+    def plot_legacy(self, **kwargs):       
         from ..plot import plot_elements 
         return plot_elements(self.elements, **kwargs)      
+    
+    def plot(self, **kwargs):
+        from ..plot import plot_eldef
+        return plot_eldef(self, **kwargs)
     
     # ASSIGNMENT AND PREPARATION METHODS
     def assemble(self, constraint_type=None, update_all=False):
@@ -277,6 +289,7 @@ class ElDef:
             constraint_type = self.constraint_type
 
         self.update_all_elements()
+        self.update_all_geometry()
 
         if update_all:
             self.update_k()
@@ -633,6 +646,25 @@ class ElDef:
         for element in self.elements:
             element.update()
     
+    def set_element_settings(self, **kwargs):
+        '''
+        Set settings for all elements.
+        
+        Arguments
+        ----------
+        setting1 : optional
+            value of 'setting1' 
+        setting2 : optional
+            value of 'setting2'
+        ...
+        
+        Returns 
+        --------
+        None.
+        '''
+        for key in kwargs:
+            for el in self.elements:
+                setattr(el, key, kwargs[key])
     
     def deform(self, u, vel=None, du=None, update_tangents=True):
         '''
@@ -689,7 +721,7 @@ class ElDef:
             else:
                 node.du = None
                 
-            node.u =  node.u*0
+            node.u = node.u*0
             node.x = node.x0*1
 
         if not only_deform:
@@ -1037,9 +1069,10 @@ class ElDef:
 
         Returns
         -----------
-        elements
-        node_ix
-            only returned if `return_node_ix` is True
+        elements : `Element`
+            list of element objects
+        node_ix : int
+            only returned if `return_node_ix` is True, index of nodes
 
         '''
         elements = [el for el in self.elements if node_label in el.nodes]  
@@ -1049,6 +1082,46 @@ class ElDef:
             return elements, node_ix
         else:
             return elements     
+    
+        
+    def find_closest_node(self, xyz):
+        '''
+        Get node closest to given coordinates.
+
+        Arguments
+        ------------
+        xyz : float
+            numpy array or list of coordinates
+
+        Returns
+        -----------
+        node : `Node`
+            node object closest to given coordinates
+
+        '''
+        
+        ix = np.argmin(np.sum((self.coordinates - np.array(xyz))**2, axis=1))
+        return self.nodes[ix]
+        
+    def add_node(self, xyz, label=None, connect_to_closest=True, 
+                 connection_type='beam3d', ndofs=6, reassign=True):
+        
+        if label is None:
+            label = max(self.nodes).label+1
+            
+        node = Node(label, xyz, ndofs=ndofs)
+        closest_node = self.find_closest_node(xyz)
+        self.nodes.append(node)
+        
+        if connect_to_closest:
+            self.constraints.append(Constraint([closest_node], [node], node_type=connection_type,
+                                    name=f'{node.label} --> {closest_node.label}'))
+        
+        if reassign:
+            self.assign_node_dofcounts(n=ndofs)   
+            self.assign_global_dofs()
+            
+        return node
         
         
     def export_matrices(self, part_ix=None):
