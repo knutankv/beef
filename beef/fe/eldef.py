@@ -723,6 +723,7 @@ class ElDef:
                 
             node.u = node.u*0
             node.x = node.x0*1
+            node.R = np.eye(3)
 
         if not only_deform:
             for element in self.elements:

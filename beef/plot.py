@@ -321,7 +321,7 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
     return pl
 
 
-def plot_eldef(eldef, plot_states=['undeformed'], plot_nodes=False, vals=None, el_opts={}, def_el_opts={}, node_opts={}, canvas_opts={},
+def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes=False, vals=None, el_opts={}, def_el_opts={}, node_opts={}, canvas_opts={},
                   show=True, plot_tmat_ax=[1,2], tmat_opts={}, tmat_scaling=10, tmat_on=[], val_fun=None,
                   vals_on=[], colorbar_opts={}, clim=None, annotate_vals={}, pl=None, node_labels=False, 
                   element_labels=False, thickness_scaling=None, cmap='viridis', view=None, nodelabel_opts={}, elementlabel_opts={},
@@ -335,7 +335,12 @@ def plot_eldef(eldef, plot_states=['undeformed'], plot_nodes=False, vals=None, e
     if node_label_fun is None:
         node_label_fun = lambda n: str(int(n.label))
         
-    elements = eldef.elements
+    if plot_elements is not False:
+        if plot_elements is True:
+            elements = eldef.elements
+        else:
+            elements = [el for el in eldef.elements if el in plot_elements]
+
     nodes = eldef.nodes
     
     if elements[0].domain == '2d':
