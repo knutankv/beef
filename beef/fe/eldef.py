@@ -424,8 +424,10 @@ class ElDef:
             `Node` object corresponding to input label
 
         '''
-
-        return self.nodes[self.nodes.index(int(node_label))]
+        if type(node_label) is Node:
+            return self.nodes[self.nodes.index(int(node_label.label))]  
+        else:
+            return self.nodes[self.nodes.index(int(node_label))]
 
     def get_nodes(self, node_labels):
         '''
@@ -467,7 +469,7 @@ class ElDef:
         subset.assign_global_dofs()
         return subset
     
-    def get_element_subset(self, elements, renumber=True):
+    def get_element_subset(self, elements, renumber=True, fix_constraints=True):
         '''
         Get a new `ElDef` as a subset from the current based on specified elements.
 
@@ -478,6 +480,8 @@ class ElDef:
         renumber : True
             if renumbering of global dofs and removal of nodes not connected to 
             elements should be conducted
+        fix_constraints : True
+            if constraints of nodes no longer present should be removed
 
         Returns
         -----------
@@ -490,9 +494,25 @@ class ElDef:
         subset.elements = [element for element in subset.elements if element in elements]
         subset.nodes = list(set([item for sublist in [el.nodes for el in subset.elements] for item in sublist]))
         
+        if fix_constraints:
+            updated_constraints = []
+            if subset.constraints is not None:
+                for c in subset.constraints:
+                    ncs = []
+                    updated_constraint = copy(c)
+                    for nc in c.node_constraints:
+                        if (nc.master_node in subset.nodes or nc.master_node is None) and (nc.slave_node in subset.nodes or nc.slave_node is None):
+                            ncs.append(nc)
+                    
+                    if len(ncs)!=0:
+                        updated_constraint.node_constraints = ncs
+                        updated_constraints.append(updated_constraint)
+                    
+                subset.constraints = updated_constraints
+            
         if renumber:
             subset.assign_node_dofcounts()
-            subset.assign_global_dofs()
+            subset.assign_global_dofs()        
             
         return subset
 
@@ -532,6 +552,24 @@ class ElDef:
         element_labels = np.hstack([element.label for element in self.elements])
         return element_labels
 
+
+    def get_elements(self, element_labels):
+        '''
+        Get list of `Element` objects from list of element labels.
+
+        Arguments
+        -----------
+        element_labels : int
+            list of labels of elements
+        
+        Returns
+        -------------
+        elements : obj
+            Element object corresponding to input label
+
+        '''
+        return [self.get_element(e) for e in element_labels]
+              
 
     def get_element(self, element_label):
         '''
@@ -626,6 +664,37 @@ class ElDef:
         if reassemble:
             self.assemble()
 
+    def remove_element(self, element_label):
+        '''
+        Remove specified element
+        '''
+        self.elements.remove(element_label)
+
+
+    def syncronize_objects_with_labels(self, output_copy=False):
+        '''
+        Update connectivity such that nodes defined within elements are updated 
+        to refer to present nodes with same label.
+        '''
+        if output_copy:
+            part = self.copy()
+        else:
+            part = self
+
+        for el in part.elements:
+            node_labels = [int(n.label) for n in el.nodes]
+            el.nodes = part.get_nodes(node_labels)
+
+        for constraint in part.constraints:
+            for nc in constraint.node_constraints:
+                if nc.slave_node is not None:
+                    nc.slave_node = part.get_node(int(nc.slave_node))
+                if nc.master_node is not None:
+                    nc.master_node = part.get_node(int(nc.master_node))
+        
+        if output_copy:
+            return part
+
     def update_geometry_to_deformed(self):
         '''
         Propagate deformed state of `ElDef` to undeformed state (redefine geometry).
@@ -646,12 +715,14 @@ class ElDef:
         for element in self.elements:
             element.update()
     
-    def set_element_settings(self, **kwargs):
+    def set_element_settings(self, elements=None, **kwargs):
         '''
         Set settings for all elements.
         
         Arguments
         ----------
+        elements : None, int
+            list of elements to assign values to (standard None assigns to all elements)
         setting1 : optional
             value of 'setting1' 
         setting2 : optional
@@ -662,8 +733,14 @@ class ElDef:
         --------
         None.
         '''
+
+        if elements is None:
+            els = self.elements
+        else:
+            els = self.get_elements(elements)
+
         for key in kwargs:
-            for el in self.elements:
+            for el in els:
                 setattr(el, key, kwargs[key])
     
     def deform(self, u, vel=None, du=None, update_tangents=True):
@@ -1085,7 +1162,7 @@ class ElDef:
             return elements     
     
         
-    def find_closest_node(self, xyz):
+    def find_closest_node(self, xyz, avoid_nodes=[]):
         '''
         Get node closest to given coordinates.
 
@@ -1093,6 +1170,8 @@ class ElDef:
         ------------
         xyz : float
             numpy array or list of coordinates
+        avoid_nodes : []
+            list of nodes to avoid when searching for closest node
 
         Returns
         -----------
@@ -1101,29 +1180,67 @@ class ElDef:
 
         '''
         
-        ix = np.argmin(np.sum((self.coordinates - np.array(xyz))**2, axis=1))
-        return self.nodes[ix]
+        ixs = np.argsort(np.sum((self.coordinates - np.array(xyz))**2, axis=1))
+        for ix in ixs:
+            node = self.nodes[ix]
+            if node not in avoid_nodes:
+                return node
         
-    def add_node(self, xyz, label=None, connect_to_closest=True, 
-                 connection_type='beam3d', ndofs=6, reassign=True):
+    def add_node(self, xyz, label=None, connect_to='closest', 
+                 connection_type='beam3d', ndofs=6, reassign=True, return_constraint=False,
+                 avoid_nodes=[]):
         
         if label is None:
             label = max(self.nodes).label+1
             
         node = Node(label, xyz, ndofs=ndofs)
-        closest_node = self.find_closest_node(xyz)
+        if connect_to == 'closest':
+            connect_node = self.find_closest_node(xyz, avoid_nodes=avoid_nodes).label
+        elif connect_to is not None:
+            connect_node = connect_to
+        else:
+            connect_node = None
+            
         self.nodes.append(node)
         
-        if connect_to_closest:
-            self.constraints.append(Constraint([closest_node], [node], node_type=connection_type,
-                                    name=f'{node.label} --> {closest_node.label}'))
+        if connect_to is not None:
+            c = Constraint([connect_node], [node.label], node_type=connection_type,
+                                    name=f'{node.label} --> {connect_node}')
+            if (self.constraints is None) or (len(self.constraints)==0):
+                self.constraints = [c]
+            else:
+                self.constraints.append(c)
+        else:
+            c = None
         
         if reassign:
             self.assign_node_dofcounts(n=ndofs)   
             self.assign_global_dofs()
-            
-        return node
         
+        if return_constraint:
+            return node, c
+        else:
+            return node
+
+    def export_nodematrix(self):
+        '''
+        Establish node matrix describing nodes in `ElDef`.
+
+        Returns
+        ------------
+        node_matrix : float
+            node definition where each row represents a node as [node_label_i, x_i, y_i, z_i]
+
+        '''
+        
+        node_matrix = []
+        for node in self.nodes:
+            node_matrix.append(np.hstack([node.label, node.coordinates]))
+        
+        node_matrix = np.vstack(node_matrix)
+        
+        return node_matrix           
+    
         
     def export_matrices(self, part_ix=None):
         '''

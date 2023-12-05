@@ -75,7 +75,8 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
         group_ixs = {sec: np.array([el in grouped_els[sec] for el in els]) for sec in grouped_els}
         
         return grouped_els, group_ixs
-        
+    
+
         
     def generate_mesh(els, field='x', pad_size=2):
         # Coordinates of nodes
@@ -270,9 +271,11 @@ def plot_elements(elements, plot_states=['undeformed'], plot_nodes=False, vals=N
         lbl = [element_label_fun(el) for el in elements_labeled]
 
         if 'deformed' in plot_states:
-            pl.add_point_labels(np.vstack([conv_fun(el.get_cog(deformed=True)) for el in elements_labeled]), lbl, text_color='blue', shape_color='white', shape_opacity=0.4, **nodelabel_settings)
+            pl.add_point_labels(np.vstack([conv_fun(el.get_cog(deformed=True)) for el in elements_labeled]), 
+                                lbl, text_color='blue', shape_color='white', shape_opacity=0.4, **nodelabel_settings)
         else:
-            pl.add_point_labels(np.vstack([conv_fun(el.get_cog(deformed=False)) for el in elements_labeled]), lbl, text_color='blue', shape_color='white', shape_opacity=0.4, **nodelabel_settings)            
+            pl.add_point_labels(np.vstack([conv_fun(el.get_cog(deformed=False)) for el in elements_labeled]), 
+                                lbl, text_color='blue', shape_color='white', shape_opacity=0.4, **nodelabel_settings)            
             
         
     for key in canvas_settings:
@@ -325,7 +328,7 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
                   show=True, plot_tmat_ax=[1,2], tmat_opts={}, tmat_scaling=10, tmat_on=[], val_fun=None,
                   vals_on=[], colorbar_opts={}, clim=None, annotate_vals={}, pl=None, node_labels=False, 
                   element_labels=False, thickness_scaling=None, cmap='viridis', view=None, nodelabel_opts={}, elementlabel_opts={},
-                  element_label_fun=None, node_label_fun=None, plot_node_states=None):
+                  element_label_fun=None, constraints_on=['undeformed','deformed'], def_constraint_opts={}, constraint_opts={}, plot_constraints=[], node_label_fun=None, plot_node_states=None):
     
     if plot_node_states is None:
         plot_node_states = plot_states
@@ -362,6 +365,26 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
         
         return grouped_els, group_ixs
         
+    def generate_constraint_mesh(constraints, field='x', pad_size=2):
+        nodes = []
+        for c in constraints:
+            nodes.append([[nc.master_node, nc.slave_node] for nc in c.node_constraints])
+        
+        nodes = [a for b in nodes for a in b]
+        nodes_pairs = [n for n in nodes if n[1] is not None]
+        
+        nodes = [a for b in nodes_pairs for a in b]
+        node_pos = np.vstack([conv_fun(getattr(node, field))[:3] for node in nodes])
+
+        nodes = [n.label for n in nodes]
+        edges = np.vstack([[ix*2, ix*2+1] for ix in range(len(nodes_pairs))])
+
+        # # We must "pad" the edges to indicate to vtk how many points per edge
+        padding = np.empty(edges.shape[0], int) * 2
+        padding[:] = pad_size
+        edges_w_padding = np.vstack((padding, edges.T)).T
+        mesh = pv.PolyData(node_pos, edges_w_padding)
+        return mesh
         
     def generate_mesh(els, field='x', pad_size=2):
         # Coordinates of nodes
@@ -370,7 +393,7 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
 
         nodes = [n.label for n in nodes]
         edges = np.vstack([[nodes.index(el.nodes[0]), nodes.index(el.nodes[1])] for el in els])
-
+        
         # # We must "pad" the edges to indicate to vtk how many points per edge
         padding = np.empty(edges.shape[0], int) * 2
         padding[:] = pad_size
@@ -455,7 +478,7 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
     tmat_settings = dict(show_edges=False)    
 
     nodelabel_settings = dict(always_visible=True)
-    elementlabel_settings = dict(always_visible=True)
+    elementlabel_settings = dict(always_visible=True, text_color='blue', shape_color='white', shape_opacity=0.4)
     
     def_el_settings = dict(
         scalars=scalars['deformed'],
@@ -478,14 +501,13 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
         show_scalar_bar=show_scalarbar['undeformed'],
         )
 
-        
+    
     node_settings = dict(
         render_points_as_spheres=True,
         color='magenta',
         lighting=True,
         point_size=5
     )  
-
     
     def_el_settings.update(def_el_opts)
     canvas_settings.update(canvas_opts)
@@ -494,7 +516,14 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
     tmat_settings.update(tmat_opts)
     nodelabel_settings.update(nodelabel_opts)
     elementlabel_settings.update(elementlabel_opts)
-     
+    
+    rel_constraint_settings = dict(el_settings)
+    def_rel_constraint_settings = dict(def_el_settings)
+    
+    rel_constraint_settings.update(constraint_opts)
+    def_rel_constraint_settings.update(def_constraint_opts)
+    
+    
     if pl is None:
         pl = pv.Plotter()
         
@@ -533,6 +562,16 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
             pl.add_mesh(generate_mesh(elements, 'x'), annotations=annotate_vals,
                         scalar_bar_args=scalar_bar_settings, **def_el_settings)
     
+    if 'relative' in plot_constraints:
+        fields = {'undeformed':'x0', 'deformed':'x'}
+        settings = {'undeformed': rel_constraint_settings,
+                    'deformed': def_rel_constraint_settings}
+        for state in constraints_on:
+            mesh = generate_constraint_mesh(eldef.constraints, field=fields[state])
+            pl.add_mesh(mesh, **settings[state])     
+
+       
+    
     if plot_nodes is not False:
         if plot_nodes is True:
             nodes_to_plot = nodes*1
@@ -564,9 +603,9 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
         lbl = [element_label_fun(el) for el in elements_labeled]
 
         if 'deformed' in plot_states:
-            pl.add_point_labels(np.vstack([conv_fun(el.get_cog(deformed=True)) for el in elements_labeled]), lbl, text_color='blue', shape_color='white', shape_opacity=0.4, **nodelabel_settings)
+            pl.add_point_labels(np.vstack([conv_fun(el.get_cog(deformed=True)) for el in elements_labeled]), lbl,  **elementlabel_settings)
         else:
-            pl.add_point_labels(np.vstack([conv_fun(el.get_cog(deformed=False)) for el in elements_labeled]), lbl, text_color='blue', shape_color='white', shape_opacity=0.4, **nodelabel_settings)            
+            pl.add_point_labels(np.vstack([conv_fun(el.get_cog(deformed=False)) for el in elements_labeled]), lbl, **elementlabel_settings)            
             
         
     for key in canvas_settings:
@@ -591,8 +630,8 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
 
                 pl.add_arrows(np.vstack(pos), np.vstack(vec), color=tmat_colors[ax], **tmat_settings)
     
-    if vals is not None:
-        pl.add_scalar_bar(**scalar_bar_settings)
+    # if vals is not None:
+    #     pl.add_scalar_bar(**scalar_bar_settings)
     
     if elements[0].domain == '2d':
         pl.view_xy()
