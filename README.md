@@ -67,7 +67,7 @@ H. Karadeniz, M. P. Saka, and V. Togan, “Finite Element Analysis of Space Fram
 
 Citation
 =======================
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8090990.svg)](https://doi.org/10.5281/zenodo.8090990
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8090990.svg)](https://doi.org/10.5281/zenodo.8090990)
 
 Support
 =======================
