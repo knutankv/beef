@@ -59,7 +59,7 @@ class Constraint:
 
 class NodeConstraint:
     '''
-    Core class for a single DOF-to-DOF constraint, used to setup Constraint.
+    Core class for a single DOF-to-DOF constraint, used to setup ´Constraint´.
 
     Arguments
     -----------------

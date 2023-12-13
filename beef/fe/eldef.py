@@ -205,7 +205,7 @@ class ElDef:
         Arguments 
         -------------
         mats : str
-            list where the three values 'k', 'c', 'cquad', and 'm' are allowed, 
+            list where the values 'k', 'c', 'cquad', and 'm' are allowed, 
             specifying what matrices to establish
 
         Returns
@@ -220,8 +220,11 @@ class ElDef:
 
         for feature in self.features:
             if feature.type in mats:
-                ixs = self.get_global_dofs(feature.node_labels)[feature.dofs].flatten()
-                feature_mats[feature.type][np.ix_(ixs, ixs)] += self.get_feature_mat(feature)
+                gdof1 = self.get_global_dofs([feature.node_labels[0]])
+                gdof2 = self.get_global_dofs([feature.node_labels[1]])
+                for dof_ix in feature.dofs:
+                    gdofs = np.hstack([gdof1[dof_ix], gdof2[dof_ix]])
+                    feature_mats[feature.type][np.ix_(gdofs, gdofs)] += self.get_feature_mat(feature)
 
         feature_list = [feature_mats[key] for key in mats]  # return as list with same order as input
 
@@ -424,6 +427,9 @@ class ElDef:
             `Node` object corresponding to input label
 
         '''
+        if node_label is None:
+            return None
+
         if type(node_label) is Node:
             return self.nodes[self.nodes.index(int(node_label.label))]  
         else:
@@ -1074,7 +1080,7 @@ class ElDef:
         
         # Add contributions from all elements
         for el in self.elements:
-            dof_range = np.r_[el.nodes[0].global_dofs, el.nodes[1].global_dofs]
+            dof_range = el.global_dofs
             mass[np.ix_(dof_range, dof_range)] += el.get_m()
             stiffness[np.ix_(dof_range, dof_range)] += el.get_k()
             geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg_axial()  #if N0 specified in 

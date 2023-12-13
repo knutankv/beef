@@ -193,7 +193,6 @@ class BeamElement:
         self.e = self.get_e()
 
         self.tmat = self.get_tmat() 
-        self.T0 = self.Tn*1
         self.psi = self.get_psi(return_phi=False)
 
 
@@ -929,7 +928,7 @@ class BeamElement3d(BeamElement):
         selector for mass formulation
     shear_flexible : False
         whether or not to include shear flexibility in establishment of element matrices
-    nonlinear : False
+    nonlinear : True
         whether or not to use nonlinear formulation (corotational)
     e2 : float, optional
         3x1 numpy array describing second perpendicular vector (if not given, automatically generated)
@@ -986,6 +985,7 @@ class BeamElement3d(BeamElement):
     
     @nonlinear.setter
     def nonlinear(self, nonlin_val):
+        self._nonlinear = nonlin_val
         if nonlin_val:
             self.update = self.update_nonlinear
         else:

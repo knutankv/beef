@@ -368,7 +368,7 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
     def generate_constraint_mesh(constraints, field='x', pad_size=2):
         nodes = []
         for c in constraints:
-            nodes.append([[nc.master_node, nc.slave_node] for nc in c.node_constraints])
+            nodes.append([[eldef.get_node(nc.master_node), eldef.get_node(nc.slave_node)] for nc in c.node_constraints])
         
         nodes = [a for b in nodes for a in b]
         nodes_pairs = [n for n in nodes if n[1] is not None]
@@ -517,8 +517,8 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
     nodelabel_settings.update(nodelabel_opts)
     elementlabel_settings.update(elementlabel_opts)
     
-    rel_constraint_settings = dict(el_settings)
-    def_rel_constraint_settings = dict(def_el_settings)
+    rel_constraint_settings = dict(el_settings) | {'render_lines_as_tubes': False, 'line_width':2}
+    def_rel_constraint_settings = dict(def_el_settings) | {'render_lines_as_tubes': False, 'line_width': 2}
     
     rel_constraint_settings.update(constraint_opts)
     def_rel_constraint_settings.update(def_constraint_opts)

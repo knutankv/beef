@@ -44,6 +44,9 @@ class Feature:
         else:
             matrix = basic_coupled()*value
 
+        if local==True:
+            raise ValueError('Only global CSYS features supported currently.')
+
         self.node_labels = node_labels
         self.dofs = dofs
         self.matrix = matrix
