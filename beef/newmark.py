@@ -640,7 +640,6 @@ def dnewmark_lin_alt(K, C, M, df, u, udot, uddot, dt, beta=1.0/4.0, gamma=0.5):
 def newmark_lin(K, C, M, f, t, u0, udot0, beta=1.0/4.0, gamma=0.5, solver='full_hht', alpha=0.0):
     """
     Combined linear Newmark (predictor-corrector), full time history.
-
     
     Arguments
     -----------

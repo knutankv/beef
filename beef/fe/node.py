@@ -36,6 +36,7 @@ class Node:
         self.x0 = None
         self.x = None
         self.u = None 
+        self.vel = None     # velocity
         self.du = None
         self.dim = len(coordinates[1:])
         

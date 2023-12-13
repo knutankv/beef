@@ -50,12 +50,14 @@ class Analysis:
         dictionary specifying stiffness and mass proportional damping
     tol_fun : np.linalg.norm
         function to apply for tolerance checks
+    include_quadratic : False
+        whether or not to include quadratic damping features
     '''
 
     def __init__(self, eldef, forces=None, prescribed_N=None, prescribed_displacements=None, 
         tmax=1, dt=1, itmax=10, t0=0, tol=None, nr_modified=False, 
         newmark_factors={'beta': 0.25, 'gamma': 0.5}, rayleigh={'stiffness': 0, 'mass':0}, 
-        tol_fun=np.linalg.norm, show_warnings=True):
+        tol_fun=np.linalg.norm, show_warnings=True, include_quadratic=False):
 
         if forces is None:
             forces = []
@@ -69,12 +71,14 @@ class Analysis:
         self.t = np.arange(t0, tmax+dt, dt)
         self.itmax = itmax
         self.prescribed_N = prescribed_N
+        self.include_quadratic = include_quadratic
 
         if 'alpha' not in newmark_factors:
             newmark_factors['alpha'] = 0.0
 
         # TODO: treat prescribed displacements
         # self.dof_pairs = np.vstack([self.eldef.dof_pairs, self.get_dof_pairs_from_prescribed_displacements()])
+
         self.dof_pairs = self.eldef.dof_pairs
         self.Linv = dof_pairs_to_Linv(self.dof_pairs, len(self.eldef.nodes)*(self.eldef.dim-1)*3)
         
@@ -97,6 +101,12 @@ class Analysis:
         tol0.update(**tol)
         self.tol = tol0
         
+        # Assign initial prescribed N
+        if prescribed_N is not None:
+            N = self.prescribed_N(0)
+            for ix, el in enumerate(self.eldef.elements):
+                el.N0 = N[ix]
+            
         self.run_all_iterations = all(v is None for v in tol.values())
         self.newmark_factors = newmark_factors
         self.nr_modified = nr_modified
@@ -244,7 +254,13 @@ class Analysis:
             u, udot, uddot, du = newmark.pred(u, udot, uddot, dt)
             
             # Deform part
-            self.eldef.deform(L @ u)    # deform nodes in part given by u => new f_int and K from elements
+            if self.include_quadratic:
+                self.eldef.deform(L @ u, vel=L @ udot)
+                self.eldef.update_c(include_quadratic=True)
+            else:
+                self.eldef.deform(L @ u)    # deform nodes in part given by u => new f_int and K from elements
+            
+
             du_inc = u*0
 
             # Calculate internal forces and residual force
@@ -305,7 +321,7 @@ class Analysis:
             return self.u
 
 
-    def run_lin_dynamic(self, solver='full_hht', print_progress=True, return_results=False):
+    def run_lin_dynamic(self, solver='lin', print_progress=True, return_results=False):
         '''
         Run dynamic (linear) solution, using parameters and element definition specified in parent Analysis object.
 
@@ -430,32 +446,32 @@ class Analysis:
             eigenvectors (stacked as columns) from analysis
         '''
 
-        M, C, K, __ = self.eldef.global_element_matrices(constraint_type='primal')
+        M, C, K, Kg = self.eldef.get_element_matrices(constraint_type='primal')
+        
+        if self.eldef.include_linear_kg:
+            K = K + Kg
+        
         C = C + M*self.rayleigh['mass'] + K*self.rayleigh['stiffness']  # Rayleigh damping
 
         A = statespace(K, C, M)
         lambd, phi = np.linalg.eig(A)
-        
+
+        if ~return_complex:
+            phi = np.real(maxreal(phi))
+
+        if not return_full:
+            __, ix = np.unique(np.abs(lambd), return_index=True)
+            n_dofs = M.shape[0]
+            phi = self.eldef.L @ phi[:n_dofs, ix]
+            lambd = lambd[ix]
+
         if normalize_modes:
             n_dofs = 6 if self.eldef.domain == '3d' else 3
             include_dofs = [0,1,2] if self.eldef.domain == '3d' else [0,1]
             phi = normalize_phi(phi, include_dofs=include_dofs, n_dofs=n_dofs)
 
-        if return_full:
-            return lambd, phi
-        else:
-            __, ix = np.unique(np.abs(lambd), return_index=True)
-            n_dofs = M.shape[0]
-            phi = self.eldef.L @ phi[:n_dofs, ix]
-            lambd = lambd[ix]
-            
-                
-            if ~return_complex:
-                phi = maxreal(phi)
-                phi = np.real(phi)
-
         return lambd, phi
-    
+
 
     def run_static(self, print_progress=True, return_results=False):
         '''
@@ -591,3 +607,4 @@ class Analysis:
 
         if return_results:
             return self.u
+

@@ -31,7 +31,7 @@ def statespace(K, C, M):
 
     return A
 
-def normalize_phi(phi, include_dofs=[0,1,2,3,4,5], n_dofs=6, return_scaling=False):
+def normalize_phi(phi, include_dofs=[0, 1, 2, 3, 4, 5], n_dofs=6, return_scaling=False):
     '''
     Normalize input phi matrix (modal transformation with modes stacked as columns).
 
@@ -59,21 +59,24 @@ def normalize_phi(phi, include_dofs=[0,1,2,3,4,5], n_dofs=6, return_scaling=Fals
     phi_for_scaling = np.vstack([phi[dof::n_dofs, :] for dof in include_dofs])
     mode_scaling = np.max(np.abs(phi_for_scaling), axis=0)
     ix_max = np.argmax(np.abs(phi_for_scaling), axis=0)
+
     signs = np.sign(phi_for_scaling[ix_max, range(0, len(ix_max))])
     signs[signs==0] = 1
-    mode_scaling[mode_scaling==0] = 1
 
-    phi_n = phi/np.tile(mode_scaling[np.newaxis,:]/signs[np.newaxis,:], [phi.shape[0], 1])
+    mode_scaling[mode_scaling==0] = 1
+    phi_n = phi/np.tile(mode_scaling[np.newaxis,:]*signs[np.newaxis,:], [phi.shape[0], 1])
 
     if return_scaling:
         return phi_n, mode_scaling
     else:
         return phi_n
 
+    return phi_n, mode_scaling
+
 
 def maxreal(phi):
     """
-    Rotate complex vectors (stacked column-wise) such that the absolute values of the real parts are maximized.
+    Rotate complex vectors (stacked column-wise) such that the absolute value of the largest real part is maximized.
 
     Arguments
     ---------------------------
@@ -95,7 +98,7 @@ def maxreal(phi):
 
     for mode in range(np.shape(phi)[1]):
         rot_mode = np.dot(np.expand_dims(phi[:, mode], axis=1), np.exp(angles*1j))
-        max_angle_ix = np.argmax(np.sum(np.real(rot_mode)**2, axis=0), axis=0)
+        max_angle_ix = np.argmax(np.real(rot_mode)**2, axis=1)
 
         phi_max_real[:, mode] = phi[:, mode] * np.exp(angles[0, max_angle_ix]*1j)*np.sign(sum(np.real(phi[:, mode])))
   

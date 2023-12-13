@@ -6,6 +6,7 @@ import numpy as np
 from .node import *
 from .element import *
 from .section import *
+from .constraint import *
 from scipy.linalg import null_space as null
 from ..general import ensure_list, compatibility_matrix as compmat, lagrange_constrain, gdof_ix_from_nodelabels
 from ..modal import statespace
@@ -38,10 +39,12 @@ class ElDef:
     def __init__(self, nodes, elements, constraints=None, features=None, 
                  include_linear_kg=False, constraint_type='none', domain='3d', 
                  assemble=True, forced_ndofs=None):
+        
         self.nodes = nodes
         self.elements = elements
         
         self.k, self.m, self.c, self.kg = None, None, None, None
+
         self.domain = domain
         self.dim = 2 if domain=='2d' else 3
 
@@ -57,41 +60,57 @@ class ElDef:
         # Constraints
         self.constraints = constraints 
         self.constraint_type = constraint_type
-
-        # TODO: for use with 2d
-        self.dof_pairs = self.constraint_dof_ix()    
-
+    
         if len(set(self.get_node_labels()))!=len(self.get_node_labels()):
             raise ValueError('Non-unique node labels defined.')
         
-        if constraints is not None:
-            self.B = self.compatibility_matrix()
-            self.L = null(self.B)
-        else:
-            self.B = None
-            self.L = None   
-
-        if self.dof_pairs is not None:
-            self.constrained_dofs = self.dof_pairs[self.dof_pairs[:,1]==None, 0]
-        else: 
-            self.constrained_dofs = []
-
+        # Establish features
         if features is None:
             features = []
-
-        # Establish features
         self.features = features
 
         if assemble:
-            self.assemble()
-            self.update_tangent_stiffness()
-            self.update_internal_forces()
-            self.update_mass_matrix()
+            self.assemble(constraint_type=self.constraint_type, update_all=True)
+            
 
     # TODO: Currently use this patch for inclusion of nlfe2d - fix.
     def gdof_ix_from_nodelabels(self, node_labels, dof_ix):    
         return gdof_ix_from_nodelabels(self.get_node_labels(), node_labels, dof_ix=dof_ix)
+
+    @property
+    def dof_pairs(self):
+        return self.constraint_dof_ix()
     
+    @property
+    def constrained_dofs(self):
+        if self.dof_pairs is not None:
+            return self.dof_pairs[self.dof_pairs[:,1]==None, 0]
+
+    @property
+    def B(self):
+        if self.constraints is not None:
+            return self.compatibility_matrix()
+
+    @property
+    def L(self):
+        if self.B is not None:
+            return null(self.B)
+
+
+    @property
+    def vel(self):
+        '''
+        All velocities of nodes
+        '''
+        return np.hstack([node.vel for node in self.nodes])
+    
+    @property
+    def u(self):
+        '''
+        All displacements of nodes
+        '''
+        return np.hstack([node.u for node in self.nodes])
+
     @property
     def global_dofs(self):
         '''
@@ -106,6 +125,13 @@ class ElDef:
         Number of nodes in `ElDef`.
         '''
         return np.sum([node.ndofs for node in self.nodes])
+    
+    @property
+    def coordinates(self):
+        '''
+        Array with all coordinates - rows contain coordinates of each node as ordered.
+        '''
+        return np.vstack([node.coordinates for node in self.nodes])
     
 
     def get_global_dofs(self, nodelabels):
@@ -127,6 +153,46 @@ class ElDef:
         global_dofs = np.hstack([self.get_node(nl).global_dofs for nl in nodelabels]).flatten()
         return global_dofs
 
+    def refine_mesh(self, n):
+        '''
+        Refines mesh of `ElDef` by subidividing all elements by same factor. Method retains node labels of original nodes, but element labels are completely renumbered.
+        
+        Arguments 
+        -------------
+        n : int
+            number of subdivisions per element
+
+        '''
+        els = []
+        count_el = 0
+        count_n = np.max(self.get_node_labels())
+
+        for el in self.elements:
+            sub_els = el.subdivide(n)
+
+            for eli in sub_els:
+                count_el = count_el + 1
+                eli.label = count_el*1
+
+            for eli in sub_els[:-1]:
+                count_n = count_n + 1
+                eli.nodes[1].label = count_n*1
+            
+            els.append(sub_els)
+
+        self.elements = [a for b in els for a in b]
+        self.nodes = [item for sublist in [el.nodes for el in self.elements] for item in sublist]
+        self.nodes = list(set(self.nodes))
+        self.assign_node_dofcounts(self.nodes[0].ndofs) #TODO: should not be necessary to specify n here...
+        self.assign_global_dofs()
+        self.assemble(update_all=True)
+
+
+    def get_feature(self, name):
+        valid_features = [f for f in self.features if f.name==name]
+        return valid_features
+        
+        
     def get_feature_mat(self, feature):
         # tmat = feature.T
         # return tmat.T @ feature.matrix @ tmat.T
@@ -139,7 +205,7 @@ class ElDef:
         Arguments 
         -------------
         mats : str
-            list where the three values 'k', 'c', and 'm' are allowed, 
+            list where the values 'k', 'c', 'cquad', and 'm' are allowed, 
             specifying what matrices to establish
 
         Returns
@@ -154,8 +220,11 @@ class ElDef:
 
         for feature in self.features:
             if feature.type in mats:
-                ixs = self.get_global_dofs(feature.node_labels)[feature.dofs].flatten()
-                feature_mats[feature.type][np.ix_(ixs, ixs)] += self.get_feature_mat(feature)
+                gdof1 = self.get_global_dofs([feature.node_labels[0]])
+                gdof2 = self.get_global_dofs([feature.node_labels[1]])
+                for dof_ix in feature.dofs:
+                    gdofs = np.hstack([gdof1[dof_ix], gdof2[dof_ix]])
+                    feature_mats[feature.type][np.ix_(gdofs, gdofs)] += self.get_feature_mat(feature)
 
         feature_list = [feature_mats[key] for key in mats]  # return as list with same order as input
 
@@ -196,12 +265,16 @@ class ElDef:
         return copy(self)
     
     # ADDITIONAL
-    def plot(self, **kwargs):       
+    def plot_legacy(self, **kwargs):       
         from ..plot import plot_elements 
         return plot_elements(self.elements, **kwargs)      
     
+    def plot(self, **kwargs):
+        from ..plot import plot_eldef
+        return plot_eldef(self, **kwargs)
+    
     # ASSIGNMENT AND PREPARATION METHODS
-    def assemble(self, constraint_type=None):
+    def assemble(self, constraint_type=None, update_all=False):
         '''
         Method to assemble element definitions according to specified
         options from parent `ElDef` object.
@@ -210,16 +283,25 @@ class ElDef:
         -------------
         constraint_type : {None, 'lagrange', 'primal'}
             how to constrain system
+        update_all : {False, True}
+            whether or not to update tangent stiffness, internal forces and mass matrix (useful for initial assembly)
         
         '''
 
         if constraint_type is None:
             constraint_type = self.constraint_type
+
         self.update_all_elements()
-        
+        self.update_all_geometry()
+
+        if update_all:
+            self.update_k()
+            self.update_internal_forces()
+            self.update_m() 
+
         self.ndim = np.sum(self.get_all_ndofs())
-        self.m, self.c, self.k, self.kg = self.global_element_matrices(constraint_type=constraint_type)
-        
+        self.m, self.c, self.k, self.kg = self.get_element_matrices(constraint_type=constraint_type)
+
         if self.include_linear_kg:
             self.k = self.k + self.kg
             
@@ -345,8 +427,13 @@ class ElDef:
             `Node` object corresponding to input label
 
         '''
+        if node_label is None:
+            return None
 
-        return self.nodes[self.nodes.index(int(node_label))]
+        if type(node_label) is Node:
+            return self.nodes[self.nodes.index(int(node_label.label))]  
+        else:
+            return self.nodes[self.nodes.index(int(node_label))]
 
     def get_nodes(self, node_labels):
         '''
@@ -388,7 +475,7 @@ class ElDef:
         subset.assign_global_dofs()
         return subset
     
-    def get_element_subset(self, elements, renumber=True):
+    def get_element_subset(self, elements, renumber=True, fix_constraints=True):
         '''
         Get a new `ElDef` as a subset from the current based on specified elements.
 
@@ -399,6 +486,8 @@ class ElDef:
         renumber : True
             if renumbering of global dofs and removal of nodes not connected to 
             elements should be conducted
+        fix_constraints : True
+            if constraints of nodes no longer present should be removed
 
         Returns
         -----------
@@ -411,9 +500,25 @@ class ElDef:
         subset.elements = [element for element in subset.elements if element in elements]
         subset.nodes = list(set([item for sublist in [el.nodes for el in subset.elements] for item in sublist]))
         
+        if fix_constraints:
+            updated_constraints = []
+            if subset.constraints is not None:
+                for c in subset.constraints:
+                    ncs = []
+                    updated_constraint = copy(c)
+                    for nc in c.node_constraints:
+                        if (nc.master_node in subset.nodes or nc.master_node is None) and (nc.slave_node in subset.nodes or nc.slave_node is None):
+                            ncs.append(nc)
+                    
+                    if len(ncs)!=0:
+                        updated_constraint.node_constraints = ncs
+                        updated_constraints.append(updated_constraint)
+                    
+                subset.constraints = updated_constraints
+            
         if renumber:
             subset.assign_node_dofcounts()
-            subset.assign_global_dofs()
+            subset.assign_global_dofs()        
             
         return subset
 
@@ -453,6 +558,24 @@ class ElDef:
         element_labels = np.hstack([element.label for element in self.elements])
         return element_labels
 
+
+    def get_elements(self, element_labels):
+        '''
+        Get list of `Element` objects from list of element labels.
+
+        Arguments
+        -----------
+        element_labels : int
+            list of labels of elements
+        
+        Returns
+        -------------
+        elements : obj
+            Element object corresponding to input label
+
+        '''
+        return [self.get_element(e) for e in element_labels]
+              
 
     def get_element(self, element_label):
         '''
@@ -547,6 +670,37 @@ class ElDef:
         if reassemble:
             self.assemble()
 
+    def remove_element(self, element_label):
+        '''
+        Remove specified element
+        '''
+        self.elements.remove(element_label)
+
+
+    def syncronize_objects_with_labels(self, output_copy=False):
+        '''
+        Update connectivity such that nodes defined within elements are updated 
+        to refer to present nodes with same label.
+        '''
+        if output_copy:
+            part = self.copy()
+        else:
+            part = self
+
+        for el in part.elements:
+            node_labels = [int(n.label) for n in el.nodes]
+            el.nodes = part.get_nodes(node_labels)
+
+        for constraint in part.constraints:
+            for nc in constraint.node_constraints:
+                if nc.slave_node is not None:
+                    nc.slave_node = part.get_node(int(nc.slave_node))
+                if nc.master_node is not None:
+                    nc.master_node = part.get_node(int(nc.master_node))
+        
+        if output_copy:
+            return part
+
     def update_geometry_to_deformed(self):
         '''
         Propagate deformed state of `ElDef` to undeformed state (redefine geometry).
@@ -567,7 +721,35 @@ class ElDef:
         for element in self.elements:
             element.update()
     
-    def deform(self, u, du=None, update_tangents=True):
+    def set_element_settings(self, elements=None, **kwargs):
+        '''
+        Set settings for all elements.
+        
+        Arguments
+        ----------
+        elements : None, int
+            list of elements to assign values to (standard None assigns to all elements)
+        setting1 : optional
+            value of 'setting1' 
+        setting2 : optional
+            value of 'setting2'
+        ...
+        
+        Returns 
+        --------
+        None.
+        '''
+
+        if elements is None:
+            els = self.elements
+        else:
+            els = self.get_elements(elements)
+
+        for key in kwargs:
+            for el in els:
+                setattr(el, key, kwargs[key])
+    
+    def deform(self, u, vel=None, du=None, update_tangents=True):
         '''
         Deform `ElDef` specified u.
 
@@ -575,10 +757,18 @@ class ElDef:
         ----------
         u : float
             array of displacements corresponding to global stacking of nodes and dofs
+        vel : None, float
+            array of velocities corresponding to global stacking of nodes and dofs
+        du : float
+            displacement from last increment, used for corotational element analysis
         update_tangents : True
             whether or not to update the tangent stiffness resulting from the deformation (relevant in corotational formulation)
 
         '''
+
+        if vel is None:
+            vel = np.array([0]*len(u))
+
         for node in self.nodes:
             if du is None:
                 node.du = u[node.global_dofs] - node.u
@@ -586,14 +776,15 @@ class ElDef:
                 node.du = du[node.global_dofs]
 
             node.u = u[node.global_dofs]
+            node.vel = vel[node.global_dofs]
             node.x = node.x0 + node.u
             node.increment_rotation_tensor()
-
+        
         for element in self.elements:
             element.update()
-
+    
         if update_tangents:
-            self.update_tangent_stiffness()
+            self.update_k()
 
         self.update_internal_forces()
 
@@ -608,9 +799,14 @@ class ElDef:
 
         '''
         for node in self.nodes:
-            node.du = node.du*0
-            node.u =  node.u*0
+            if node.du is not None:
+                node.du = node.du*0
+            else:
+                node.du = None
+                
+            node.u = node.u*0
             node.x = node.x0*1
+            node.R = np.eye(3)
 
         if not only_deform:
             for element in self.elements:
@@ -656,12 +852,23 @@ class ElDef:
         if u is None:
             u = np.zeros([self.ndofs])
         
-        self.q = self.get_feature_mats(mats=['k']) @ u 
+        self.q = (self.get_feature_mats(mats=['k']) @ u) *0     #PATCH - assess validity!
 
         for el in self.elements:
             self.q[el.global_dofs] += el.q
 
-    def update_tangent_stiffness(self):
+    def update_c(self, include_quadratic=True):
+        '''
+        Update damping matrix, from damping features
+        '''
+
+        self.c = self.get_feature_mats(mats=['c'])
+        
+        if include_quadratic:
+            self.c = self.c + self.get_feature_mats(mats=['cquad']) * np.diag(np.abs(self.vel))
+
+
+    def update_k(self):
         '''
         Update tangent stiffness based on current state.
         '''
@@ -671,7 +878,7 @@ class ElDef:
             self.k[np.ix_(el.global_dofs, el.global_dofs)] += el.k
 
     
-    def update_mass_matrix(self):
+    def update_m(self):
         '''
         Update mass matrix based on current state.
         '''
@@ -845,7 +1052,7 @@ class ElDef:
 
 
     # GENERATE OUTPUT FOR ANALYSIS    
-    def global_element_matrices(self, constraint_type=None):   
+    def get_element_matrices(self, constraint_type=None):   
         '''
         Get global mass, damping, stiffness and geometric stiffness matrices.
 
@@ -871,22 +1078,20 @@ class ElDef:
         stiffness, damping, mass = self.get_feature_mats()       
         geometric_stiffness = np.zeros([self.ndim, self.ndim])
         
+        # Add contributions from all elements
         for el in self.elements:
-            dof_ix1, dof_ix2 = el.nodes[0].global_dofs, el.nodes[1].global_dofs
-            dof_range = np.r_[dof_ix1, dof_ix2]
-            T = el.tmat
-
+            dof_range = el.global_dofs
             mass[np.ix_(dof_range, dof_range)] += el.get_m()
             stiffness[np.ix_(dof_range, dof_range)] += el.get_k()
             geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg_axial()  #if N0 specified in 
 
+        # Impose constraints (Lagrange or primal) if requested
         if self.constraints != None:  
             if constraint_type == 'lagrange':
-                dof_pairs = self.constraint_dof_ix()
-                mass = lagrange_constrain(mass, dof_pairs)
-                damping = lagrange_constrain(damping, dof_pairs)
-                stiffness = lagrange_constrain(stiffness, dof_pairs)
-                geometric_stiffness = lagrange_constrain(geometric_stiffness, dof_pairs)
+                mass = lagrange_constrain(mass, self.dof_pairs)
+                damping = lagrange_constrain(damping, self.dof_pairs)
+                stiffness = lagrange_constrain(stiffness, self.dof_pairs)
+                geometric_stiffness = lagrange_constrain(geometric_stiffness, self.dof_pairs)
             
             elif constraint_type == 'primal':
                 stiffness = self.L.T @ stiffness @ self.L
@@ -906,7 +1111,7 @@ class ElDef:
         A : float
             state matrix A
         '''
-        m,c,k,kg = self.global_element_matrices(constraint_type='primal')
+        m,c,k,kg = self.get_element_matrices(constraint_type='primal')
         return statespace(k+kg, c, m)
 
     # MISC METHODS
@@ -948,9 +1153,10 @@ class ElDef:
 
         Returns
         -----------
-        elements
-        node_ix
-            only returned if `return_node_ix` is True
+        elements : `Element`
+            list of element objects
+        node_ix : int
+            only returned if `return_node_ix` is True, index of nodes
 
         '''
         elements = [el for el in self.elements if node_label in el.nodes]  
@@ -960,7 +1166,87 @@ class ElDef:
             return elements, node_ix
         else:
             return elements     
+    
         
+    def find_closest_node(self, xyz, avoid_nodes=[]):
+        '''
+        Get node closest to given coordinates.
+
+        Arguments
+        ------------
+        xyz : float
+            numpy array or list of coordinates
+        avoid_nodes : []
+            list of nodes to avoid when searching for closest node
+
+        Returns
+        -----------
+        node : `Node`
+            node object closest to given coordinates
+
+        '''
+        
+        ixs = np.argsort(np.sum((self.coordinates - np.array(xyz))**2, axis=1))
+        for ix in ixs:
+            node = self.nodes[ix]
+            if node not in avoid_nodes:
+                return node
+        
+    def add_node(self, xyz, label=None, connect_to='closest', 
+                 connection_type='beam3d', ndofs=6, reassign=True, return_constraint=False,
+                 avoid_nodes=[]):
+        
+        if label is None:
+            label = max(self.nodes).label+1
+            
+        node = Node(label, xyz, ndofs=ndofs)
+        if connect_to == 'closest':
+            connect_node = self.find_closest_node(xyz, avoid_nodes=avoid_nodes).label
+        elif connect_to is not None:
+            connect_node = connect_to
+        else:
+            connect_node = None
+            
+        self.nodes.append(node)
+        
+        if connect_to is not None:
+            c = Constraint([connect_node], [node.label], node_type=connection_type,
+                                    name=f'{node.label} --> {connect_node}')
+            if (self.constraints is None) or (len(self.constraints)==0):
+                self.constraints = [c]
+            else:
+                self.constraints.append(c)
+        else:
+            c = None
+        
+        if reassign:
+            self.assign_node_dofcounts(n=ndofs)   
+            self.assign_global_dofs()
+        
+        if return_constraint:
+            return node, c
+        else:
+            return node
+
+    def export_nodematrix(self):
+        '''
+        Establish node matrix describing nodes in `ElDef`.
+
+        Returns
+        ------------
+        node_matrix : float
+            node definition where each row represents a node as [node_label_i, x_i, y_i, z_i]
+
+        '''
+        
+        node_matrix = []
+        for node in self.nodes:
+            node_matrix.append(np.hstack([node.label, node.coordinates]))
+        
+        node_matrix = np.vstack(node_matrix)
+        
+        return node_matrix           
+    
         
     def export_matrices(self, part_ix=None):
         '''

@@ -180,7 +180,7 @@ class BeamElement:
 
     def update_k(self):
         '''
-        Update global stiffness matrix of element based on local current mass matrix.
+        Update global stiffness matrix of element based on local current stiffness matrix.
         '''
 
         self.k = self.tmat.T @ self.get_local_k() @ self.tmat
@@ -213,7 +213,7 @@ class BeamElement:
     def ndofs(self):
         return self.nodes[0].ndofs + self.nodes[1].ndofs
 
-    def subdivide(self, n):
+    def subdivide(self, n, shared_mid_nodes=True):
         '''
         Divide element into n elements.
 
@@ -221,6 +221,8 @@ class BeamElement:
         -----------
         n : int
             number of divisions/resulting elements
+        shared_mid_node : {True, False}
+            whether or not to share nodes of elements joined on middle of element
             
         Returns
         -------------
@@ -232,15 +234,24 @@ class BeamElement:
         elements = [None]*n
         x0 = self.nodes[0].coordinates
         x1 = self.nodes[1].coordinates
-        v = x1-x0
+        dv = x1-x0
         
         for el in range(n):
             elements[el] = deepcopy(self)
-            elements[el].nodes[0].coordinates = x0+v*1/n*el
-            elements[el].nodes[1].coordinates = x0+v*1/n*(el+1)
+            elements[el].nodes[0].coordinates = x0+dv*1/n*el
+            elements[el].nodes[1].coordinates = x0+dv*1/n*(el+1)
+            elements[el].L0 = elements[el].get_length(undeformed=True)
             
             elements[el].initiate_nodes()
         
+        if shared_mid_nodes:
+            n_max = elements[0].nodes[1].label
+            for el, element in enumerate(elements[1:]):
+                element.nodes[0] = elements[el-1+1].nodes[1]
+            
+            for el,element in enumerate(elements[:-1]):
+                element.nodes[1].label = n_max + el + 1
+                
         return elements
     
 
@@ -291,25 +302,9 @@ class BeamElement2d(BeamElement):
         self.N0 = N0
 
         # Assign mass matrix function
-        if mass_formulation not in ['timoshenko', 'euler', 'lumped', 'euler_trans']:
-            raise ValueError("{timoshenko', 'euler', 'lumped', 'euler_trans'} are allowed values for mass_formulation. Please correct input.")
-        elif mass_formulation == 'timoshenko':
-            self.get_local_m = self.local_m_timo
-        elif mass_formulation == 'euler':
-            self.get_local_m = self.local_m_euler
-        elif mass_formulation  == 'euler_trans':
-            self.get_local_m = self.local_m_euler_trans
-        elif mass_formulation == 'lumped':
-            self.get_local_m = self.local_m_lumped
-
-        # Assign update functions
-        if nonlinear:
-            self.update = self.update_nonlinear
-            self.get_local_k = self.get_local_k
-        else:
-            self.update = self.update_linear
-            self.get_local_k = self.get_local_kd
-        
+        self.mass_formulation = mass_formulation
+        self.nonlinear = nonlinear
+       
         # Initialization function runs
         self.initiate_nodes()
         self.L0 = self.get_length(undeformed=True)
@@ -322,7 +317,37 @@ class BeamElement2d(BeamElement):
 
 
     # ---------- DYNAMIC PROPERTIES ------------------
+    @property
+    def mass_formulation(self):
+        return self._mass_formulation
+    
+    @mass_formulation.setter
+    def mass_formulation(self, val):
+        self._mass_formulation = val
+        if val not in ['timoshenko', 'euler', 'lumped', 'euler_trans']:
+            raise ValueError("{timoshenko', 'euler', 'lumped', 'euler_trans'} are allowed values for mass_formulation. Please correct input.")
+        elif val == 'timoshenko':
+            self.get_local_m = self.local_m_timo
+        elif val == 'euler':
+            self.get_local_m = self.local_m_euler
+        elif val  == 'euler_trans':
+            self.get_local_m = self.local_m_euler_trans
+        elif val == 'lumped':
+            self.get_local_m = self.local_m_lumped
 
+    @property
+    def nonlinear(self):
+        return self._nonlinear
+    
+    @nonlinear.setter
+    def nonlinear(self, nonlin_val):
+        if nonlin_val:
+            self.update = self.update_nonlinear
+            self.get_local_k = self.get_local_k
+        else:
+            self.update = self.update_linear
+            self.get_local_k = self.get_local_kd
+        
     @property
     def N(self):
         return self.t[0]
@@ -464,9 +489,9 @@ class BeamElement2d(BeamElement):
         [[1]](../#1) Krenk, 2009.
 
         '''
+        
         k_local = np.zeros([6,6])
         section = self.section
-
 
         k_local[:3, :3] = (1/self.L**3) * np.array([[section.E*section.A*self.L**2,-self.Q*self.L**2, 0],
                                   [-self.Q*self.L**2, 12*self.psi*section.E*section.I[0]+6/5*self.N*self.L**2, 6*self.psi*section.E*section.I[0]*self.L+1/10*self.N*self.L**3],
@@ -903,7 +928,7 @@ class BeamElement3d(BeamElement):
         selector for mass formulation
     shear_flexible : False
         whether or not to include shear flexibility in establishment of element matrices
-    nonlinear : False
+    nonlinear : True
         whether or not to use nonlinear formulation (corotational)
     e2 : float, optional
         3x1 numpy array describing second perpendicular vector (if not given, automatically generated)
@@ -946,22 +971,39 @@ class BeamElement3d(BeamElement):
         else:
             self.get_tmat = self.get_tmat_rhs            
 
-        if mass_formulation not in ['lumped', 'consistent']:
-            raise ValueError("{'lumped', 'consistent'} are allowed values for mass_formulation. Please correct input.")
-        elif mass_formulation == 'lumped':
-            self.get_local_m = self.local_m_lumped
-        elif mass_formulation == 'consistent':
-            self.get_local_m = self.local_m_consistent
-
-        if nonlinear:
-            self.update = self.update_nonlinear
-        else:
-            self.update = self.update_linear
+        self.mass_formulation = mass_formulation
+        self.nonlinear = nonlinear
             
         self.initiate_nodes()
         self.initiate_geometry()        
         self.update_m()
     
+    
+    @property
+    def nonlinear(self):
+        return self._nonlinear
+    
+    @nonlinear.setter
+    def nonlinear(self, nonlin_val):
+        self._nonlinear = nonlin_val
+        if nonlin_val:
+            self.update = self.update_nonlinear
+        else:
+            self.update = self.update_linear
+
+    @property
+    def mass_formulation(self):
+        return self._mass_formulation
+    
+    @mass_formulation.setter
+    def mass_formulation(self, val):
+        self._mass_formulation = val
+        if val not in ['lumped', 'consistent']:
+            raise ValueError("{'lumped', 'consistent'} are allowed values for mass_formulation. Please correct input.")
+        elif val == 'lumped':
+            self.get_local_m = self.local_m_lumped
+        elif val == 'consistent':
+            self.get_local_m = self.local_m_consistent
 
     @property
     def e3(self):
@@ -1337,14 +1379,14 @@ class BeamElement3d(BeamElement):
                              0.5,
                              0.5,
                              Ip/(2*A),
-                             (L**2*mu_z**2*(1+I_y*(42+210*phi_z**2))/(A*L**2))/420,
-                             (L**2*mu_y**2*(1+I_z*(42+210*phi_y**2))/(A*L**2))/420,
+                             L**2*mu_z**2*(1+I_y*(42+210*phi_z**2))/(A*L**2)/420,
+                             L**2*mu_y**2*(1+I_z*(42+210*phi_y**2))/(A*L**2)/420,
                              0.5,
                              0.5,
                              0.5,
                              Ip/(2*A),
-                             (L**2*mu_z**2*(1+I_y*(42+210*phi_z**2))/(A*L**2))/420,
-                             (L**2*mu_y**2*(1+I_z*(42+210*phi_y**2))/(A*L**2))/420,
+                             L**2*mu_z**2*(1+I_y*(42+210*phi_z**2))/(A*L**2)/420,
+                             L**2*mu_y**2*(1+I_z*(42+210*phi_y**2))/(A*L**2)/420,
                              ])
             
         me = me + me.T - np.diag(np.diag(me)) #copy symmetric parts (& avoid doubling diagonal)
@@ -1363,7 +1405,7 @@ class BeamElement3d(BeamElement):
 
         Notes 
         ---------
-        See Kardeniz et al. [[3]](../#3) for details.
+        See Karadeniz et al. [[3]](../#3) for details.
         '''
           
         I_y, I_z = self.section.I
@@ -1378,6 +1420,7 @@ class BeamElement3d(BeamElement):
         
         A = self.section.A
         Ip = self.section.J
+        
         m22 = mu_y**2 * (13/35 + 7/10*phi_y + phi_y**2/3+6/5*I_z/(A*L**2))
         m26 = mu_y**2*L * (11/210 + 11/120 * phi_y + phi_y**2/24 + I_z/(A*L**2)*(1/10-3/2*phi_y-phi_y**2))
         m28 = mu_y**2 * (9/70 + 3/10*phi_y + phi_y**2/6-6/5*I_z/(A*L**2))
@@ -1414,10 +1457,10 @@ class BeamElement3d(BeamElement):
         O = m_11*0
         
         me = m*L*np.vstack([
-                np.hstack([m_11, m_12, m_13, m_14]),
-                np.hstack([O, m_22, m_23, m_24]),
-                np.hstack([O, O, m_11, m_34]),
-                np.hstack([O, O, O, m_22])
+                np.hstack([m_11,    m_12,      m_13,    m_14]),
+                np.hstack([O,       m_22,      m_23,    m_24]),
+                np.hstack([O,       O,         m_11,    m_34]),
+                np.hstack([O,       O,         O,       m_22])
                 ]
             )
         
@@ -1473,6 +1516,7 @@ class BeamElement3d(BeamElement):
         '''
         Update element forces from linear stiffness assumption.
         '''
+        self.update_geometry()
         self.update_k()
         self.update_m()
         self.q = np.zeros(12)

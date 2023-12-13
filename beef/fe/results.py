@@ -12,7 +12,7 @@ else:
 
 class Results:
     '''
-    Force definition class. 
+    Results definition class. 
 
     Arguments
     -------------

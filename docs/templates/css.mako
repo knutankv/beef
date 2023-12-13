@@ -12,6 +12,7 @@
 
   body {
     line-height: 1.5em;
+    font-family: sans-serif;
   }
 
   #content {
@@ -325,6 +326,7 @@
       display: flex;
       flex-direction: row-reverse;
       justify-content: flex-end;
+      font-family: sans-serif;
     }
     .toc ul ul,
     #index ul {
