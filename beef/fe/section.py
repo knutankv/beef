@@ -31,7 +31,9 @@ class Section:
     J : float, optional
         polar moment of area, relevant for torsional response
     e2 : float, optional
-        vector (3x1 in 3d, 2x1 in 2d) describing the second perpendicular vector of the element - if not given, it is generated automatically
+        vector (3x1 in 3d, 2x1 in 2d) describing the first (local y) perpendicular vector of the element - if not given, it is generated automatically
+    e3 : float, optional
+        vector (3x1 in 3d, 2x1 in 2d) describing the second (local z) perpendicular vector of the element - if not given, it is generated automatically
     shear_deformation : False, optional
         whether or not to include shear deformation in the creation of element stiffness matrices
     mass_formulation : {'euler', 'timoshenko', 'lumped'}
@@ -42,7 +44,7 @@ class Section:
 
     def __init__(self, E=0.0, rho=0.0, A=np.inf, I_y=0.0, I_z=None, 
                  poisson=0.3, m=None, G=None, kappa=1.0, J=0.0,
-                 e2=None, shear_deformation=False, mass_formulation='euler', name=None):
+                 e2=None, e3=None, shear_deformation=False, mass_formulation='euler', name=None):
 
         self.name = name
 
@@ -66,7 +68,15 @@ class Section:
         self.J = J
         self.kappa = kappa
                 
-        # Beam direction  
+        # Beam direction
+        if (e2 is not None) and (e3 is not None):
+            print('Warning: both e2 and e3 input. e2 has priority and e3 is therefore disregarded.')  
+            self.e2 = e2
+            self.e3 = None
+        else:
+            self.e2 = e2
+            self.e3 = e3
+
         self.shear_deformation = shear_deformation
         
         # Compute stuff

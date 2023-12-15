@@ -959,13 +959,6 @@ class BeamElement3d(BeamElement):
         self.q = np.zeros(12)
         self.q_loc = np.zeros(12)
 
-        # Assign e2
-        if e2 is None:
-            smallest_ix = np.argmin(abs(self.get_vec(undeformed=True)))
-            self.e2 = np.eye(3)[smallest_ix, :]
-        else:
-            self.e2 = e2
-
         if left_handed_csys:
             self.get_tmat = self.get_tmat_lhs
         else:
@@ -1006,9 +999,34 @@ class BeamElement3d(BeamElement):
             self.get_local_m = self.local_m_consistent
 
     @property
+    def e2e3_dict(self):
+        return {'e2': self.e2, 'e3':self.e3}
+
+    @property
+    def e2(self):
+        if hasattr(self, '_e2_element'):
+            return self._e2_element
+        elif (self.section is not None and self.section.e2 is not None) or (self.e3 is not None):
+            return self.section.e2
+        else:
+            smallest_ix = np.argmin(abs(self.get_vec(undeformed=True)))
+            return np.eye(3)[smallest_ix, :]
+
+    @e2.setter
+    def e2(self, val):
+        self._e2_element = val
+
+    @property
     def e3(self):
-        return self.Tn[2,:]
-    
+        if hasattr(self, '_e3_element'):
+            return self._e3_element
+        elif self.section is not None:
+            return self.section.e3
+
+    @e3.setter
+    def e3(self, val):
+        self._e3_element = val
+
     # Internal forces properties (My and Mz are in middle of beam element)
     @property
     def N(self):
@@ -1084,7 +1102,7 @@ class BeamElement3d(BeamElement):
             transformation matrix of element
         '''
 
-        T0 = transform_unit(self.e, self.e2)
+        T0 = transform_unit(self.e, **self.e2e3_dict)
         return blkdiag(T0, reps)
     
     def get_tmat_lhs(self):
@@ -1103,7 +1121,7 @@ class BeamElement3d(BeamElement):
             transformation matrix of element (12-by-12)
         '''
 
-        T0 = transform_unit(self.e, self.e2)
+        T0 = transform_unit(self.e, **self.e2e3_dict)
         T_r2l = np.array([[1,0,0,0,0,0], 
                           [0,0,1,0,0,0],
                           [0,1,0,0,0,0],
