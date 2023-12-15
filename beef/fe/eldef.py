@@ -191,12 +191,6 @@ class ElDef:
     def get_feature(self, name):
         valid_features = [f for f in self.features if f.name==name]
         return valid_features
-        
-        
-    def get_feature_mat(self, feature):
-        # tmat = feature.T
-        # return tmat.T @ feature.matrix @ tmat.T
-        return feature.matrix
 
     def get_feature_mats(self, mats=['k', 'c', 'm']):
         '''
@@ -220,11 +214,8 @@ class ElDef:
 
         for feature in self.features:
             if feature.type in mats:
-                gdof1 = self.get_global_dofs([feature.node_labels[0]])
-                gdof2 = self.get_global_dofs([feature.node_labels[1]])
-                for dof_ix in feature.dofs:
-                    gdofs = np.hstack([gdof1[dof_ix], gdof2[dof_ix]])
-                    feature_mats[feature.type][np.ix_(gdofs, gdofs)] += self.get_feature_mat(feature)
+                gdofs = np.hstack([self.get_global_dofs([nl])[feature.dofs] for nl in feature.node_labels])
+                feature_mats[feature.type][np.ix_(gdofs, gdofs)] += feature.global_matrix
 
         feature_list = [feature_mats[key] for key in mats]  # return as list with same order as input
 

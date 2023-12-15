@@ -3,7 +3,7 @@ FE objects submodule: engineering features definitions
 '''
 
 from beef import basic_coupled
-
+import numpy as np
  
 
 class Feature:
@@ -23,6 +23,8 @@ class Feature:
         whether the feature is applied wrt. a local csys or global (only global supported currently)
     name : None, optional
         name of feature
+    tmat : None
+        transformation matrix used prior to insertion in global matrices
 
     Notes
     -----------
@@ -35,7 +37,7 @@ class Feature:
     $$[K]_{i,i} = k $$
     
     '''
-    def __init__(self, feature_type, node_labels, dofs, value, local=False, name=None):
+    def __init__(self, feature_type, node_labels, dofs, value, local=False, name=None, tmat=None):
 
         if len(node_labels) == 1 or node_labels[1]==None:
             matrix = basic_coupled()[0:1, 0:1]*value
@@ -53,6 +55,8 @@ class Feature:
         self.local = local
         self.name = name
         self.type = feature_type
+        self.tmat = tmat
+
 
     # CORE METHODS
     def __str__(self):
@@ -60,15 +64,42 @@ class Feature:
 
     def __repr__(self):
         return f'BEEF Feature: {self.name}'
+    
+    @property
+    def tmat(self):
+        if self._tmat is None:
+            return np.eye(self.matrix.shape[0])
+        else:
+            return self._tmat
+        
+    @tmat.setter
+    def tmat(self, val):
+        self._tmat = val
+
+
+    @property
+    def global_matrix(self):
+        return self.tmat.T @ self.matrix @ self.tmat
 
 class CustomMatrix(Feature):
-    def __init__(self, feature_type, node_label, matrix, local=False, name=None):
-        self.node_labels = [node_label]
+    def __init__(self, feature_type, node_labels, matrix, dofs=None, name=None, tmat=None):
+        if np.ndim(node_labels)==0:
+            node_labels = [node_labels]
+
+        if dofs is None:
+            self.dofs = np.arange(0, int(matrix.shape[0]/len(node_labels)))
+        else:
+            self.dofs = np.array(dofs)
+
+        if len(self.dofs) != int(matrix.shape[0]/len(node_labels)):
+            raise ValueError('Size of dofs is not compatible with matrix size and specified node labels')
+
+        self.node_labels = node_labels
         self.matrix = matrix
-        self.local = local
         self.name = name
         self.type = feature_type  
-        self.dofs = None
+        self.tmat = tmat
+
 
 class Spring(Feature):
     def __init__(self, node_labels, dofs, k, **kwargs):
