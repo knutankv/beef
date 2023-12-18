@@ -872,29 +872,6 @@ class BeamElement2d(BeamElement):
         return kd_corot
     
 
-    # --------------- POST PROCESSING ------------------------------
-    def extract_load_effect(self, load_effect):
-        '''
-        Postprocessing method to extract bending moment, shear force or axial force at given deformation state.
-
-        Arguments
-        ----------
-        load_effect : {'M', 'V', 'N'}
-            load effect to extract
-
-        Returns
-        ----------
-        val : float
-            float number describing the queried load effect
-        '''
-
-        if load_effect == 'M':
-            return (self.q[5] - self.q[2])/2
-        elif load_effect == 'V':
-            return (self.q[4] - self.q[1])/2
-        elif load_effect == 'N':
-            return self.N
-
     # --------------- MISC ------------------------------
     def get_local_kg(self):  # element level function (global DOFs)
         '''
@@ -1641,3 +1618,4 @@ class BarElement3d(BeamElement3d):
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         ])*N/L
+    

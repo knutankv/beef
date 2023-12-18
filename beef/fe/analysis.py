@@ -2,7 +2,7 @@
 FE objects submodule: analysis definitions
 '''
 
-from copy import deepcopy as copy
+from copy import deepcopy
 import numpy as np
 from beef import gdof_from_nodedof, compatibility_matrix, B_to_dofpairs, dof_pairs_to_Linv, lagrange_constrain, convert_dofs, convert_dofs_list, ensure_list, gdof_ix_from_nodelabels, basic_coupled, blkdiag
 from scipy.linalg import block_diag, null_space as null, solve
@@ -64,7 +64,7 @@ class Analysis:
         if prescribed_displacements is None:
             prescribed_displacements = []
 
-        self.eldef = copy(eldef)  #create copy of part, avoid messing with original part definition
+        self.eldef = deepcopy(eldef)  #create copy of part, avoid messing with original part definition
 
         self.forces = forces
         self.prescr_disp = prescribed_displacements
@@ -113,6 +113,12 @@ class Analysis:
         self.rayleigh = rayleigh
         self.tol_fun = tol_fun
 
+
+    def copy(self):
+        '''
+        Return copy of the analysis object.
+        '''
+        return deepcopy(self)
 
     def get_dof_pairs_from_prescribed_displacements(self):
         '''
@@ -608,3 +614,28 @@ class Analysis:
         if return_results:
             return self.u
 
+
+    def define_deformation_history(self, u, t=None):
+        '''
+        Specify deformation history and create copy of analysis object. Convenient for postprocessing purposes.
+
+        Arguments
+        -----------
+        u : float
+            numpy array with size n_dofs x n_samples where n_samples is time steps and n_dofs is number of DOFs
+        t : None, float or int
+            numpy array with time instances, n_samples long - if not specified, t is created to give indices representing columns of u
+
+        Returns
+        ------------
+        analysis : `Analysis` object
+            copy of the original analysis object, with specified deformation history
+        '''
+        analysis = self.copy()
+        if t is None:
+            t = np.arange(u.shape[1])
+
+        analysis.u = u
+        analysis.t = t
+
+        return analysis

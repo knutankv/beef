@@ -583,8 +583,9 @@ class ElDef:
             Element object corresponding to input label
 
         '''
+        element_label = int(element_label)
         if element_label in self.elements:
-            ix = np.where(self.element_labels().astype(int)==int(element_label))[0][0]
+            ix = np.where(self.element_labels().astype(int)==element_label)[0][0]
             return self.elements[ix]
         else:
             return None
@@ -843,7 +844,7 @@ class ElDef:
         if u is None:
             u = np.zeros([self.ndofs])
         
-        self.q = (self.get_feature_mats(mats=['k']) @ u) *0     #PATCH - assess validity!
+        self.q = np.zeros([self.ndofs])
 
         for el in self.elements:
             self.q[el.global_dofs] += el.q
