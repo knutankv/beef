@@ -337,7 +337,7 @@ class ElDef:
         '''
         if n is None:
             for node in self.nodes:
-                els = self.elements_with_node(node.label, return_node_ix=False)
+                els = self.get_elements_with_node(node.label, return_node_ix=False)
                 if els != []:
                     node.ndofs = els[0].dofs_per_node
                 else:
@@ -982,7 +982,7 @@ class ElDef:
         return compat_mat   
     
     # TRANSFORMATION METHODS
-    def local_node_csys(self, node_label, average_ok=True):
+    def get_node_csys(self, node_label, average_ok=True, reps=2):
         '''
         Establish CSYS (transformation matrix) of node.
 
@@ -993,6 +993,8 @@ class ElDef:
         average_ok : True
             whether or not averaging transformation matrices at node is okay or not - if multiple elements are connected to node,
             the T might not be unique and averaging can be conducted to overcome
+        reps : 2
+            number of repeats (1 if only translations, 2 if node, 4 if 3d element)
 
         Returns
         -----------
@@ -1000,15 +1002,16 @@ class ElDef:
             numpy 2d array with transformation matrix corresponding to node
         '''
 
-        elements, node_ix = self.elements_with_node(node_label, merge_parts=True)
+        elements = self.get_elements_with_node(node_label, return_node_ix=False)
         
         t_mats = [el.get_tmat(reps=1) for el in elements]
         
         if (len(elements)>1) and not average_ok:
             raise ValueError('More elements connected to node. Use average_ok=True if averaging of transformation mats is fine.')
         
-        t_mat = blkdiag(np.mean(np.stack(t_mats, axis=2), axis=2), 2)
-        
+        # TODO: should be replaced by quaternions operations to get true average...
+        t_mat = blkdiag(np.mean(np.stack(t_mats, axis=2), axis=2), reps)
+
         return t_mat
 
     def get_kg_axial(self, N=None):
@@ -1132,7 +1135,7 @@ class ElDef:
         return max_dim
     
     
-    def elements_with_node(self, node_label, return_node_ix=True):
+    def get_elements_with_node(self, node_label, return_node_ix=True):
         '''
         Get elements that contain nodes with given node label.
 
