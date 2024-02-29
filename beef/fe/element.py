@@ -195,6 +195,40 @@ class BeamElement:
         self.tmat = self.get_tmat() 
         self.psi = self.get_psi(return_phi=False)
 
+    # ------ Assignment methods --------------------------
+    @property
+    def section(self):
+        return self._section
+    
+    @section.setter
+    def section(self, val):
+        self._section = val
+        
+        mass_formulation = self.section.mass_formulation
+        if mass_formulation == 'timoshenko':
+            self.get_local_m = self.local_m_timo
+        elif mass_formulation == 'euler':
+            self.get_local_m = self.local_m_euler
+        elif mass_formulation  == 'euler_trans':
+            self.get_local_m = self.local_m_euler_trans
+        elif mass_formulation == 'lumped':
+            self.get_local_m = self.local_m_lumped
+        else:
+            raise ValueError('Section contains no valid mass formulation definition.')
+        
+
+    @property
+    def nonlinear(self):
+        return self._nonlinear
+    
+    @nonlinear.setter
+    def nonlinear(self, nonlin_val):
+        if nonlin_val:
+            self.update = self.update_nonlinear
+            self.get_local_k = self.get_local_k
+        else:
+            self.update = self.update_linear
+            self.get_local_k = self.get_local_kd
 
     # ---------------- NODE-BASED PROPERTIES --------------
     @property
@@ -277,8 +311,6 @@ class BeamElement2d(BeamElement):
         section object to define element (standard value is standard initialized Section object)
     shear_flexible : False, optional
         whether or not to include shear flexibility
-    mass_formulation : {'euler', 'timoshenko', 'lumped'}
-        what mass formulation to apply (refers to shape functions used)
     nonlinear : True, optional
         whether or not to use nonlinear internal functions for element
     N0 : float, optional
@@ -316,38 +348,7 @@ class BeamElement2d(BeamElement):
         self.T0 = self.Tn*1     # initial transformation matrices
 
 
-    # ---------- DYNAMIC PROPERTIES ------------------
-    @property
-    def mass_formulation(self):
-        return self._mass_formulation
-    
-    @mass_formulation.setter
-    def mass_formulation(self, val):
-        self._mass_formulation = val
-        if val not in ['timoshenko', 'euler', 'lumped', 'euler_trans']:
-            raise ValueError("{timoshenko', 'euler', 'lumped', 'euler_trans'} are allowed values for mass_formulation. Please correct input.")
-        elif val == 'timoshenko':
-            self.get_local_m = self.local_m_timo
-        elif val == 'euler':
-            self.get_local_m = self.local_m_euler
-        elif val  == 'euler_trans':
-            self.get_local_m = self.local_m_euler_trans
-        elif val == 'lumped':
-            self.get_local_m = self.local_m_lumped
-
-    @property
-    def nonlinear(self):
-        return self._nonlinear
-    
-    @nonlinear.setter
-    def nonlinear(self, nonlin_val):
-        if nonlin_val:
-            self.update = self.update_nonlinear
-            self.get_local_k = self.get_local_k
-        else:
-            self.update = self.update_linear
-            self.get_local_k = self.get_local_kd
-        
+    # ---------- DYNAMIC PROPERTIES ------------------        
     @property
     def N(self):
         return self.t[0]
@@ -901,8 +902,6 @@ class BeamElement3d(BeamElement):
         integer label of element
     section : Section obj
         section describing element
-    mass_formulation : {'consistent', 'lumped'}
-        selector for mass formulation
     shear_flexible : False
         whether or not to include shear flexibility in establishment of element matrices
     nonlinear : True
@@ -916,17 +915,19 @@ class BeamElement3d(BeamElement):
         whether or not to create transformation matrices such that the results are expressed
         in a left-handed csys (*experimental*)
     '''
-    def __init__(self, nodes, label=None, section=Section(), mass_formulation='consistent', 
+    def __init__(self, nodes, label=None, section=Section(), 
                  shear_flexible=False, nonlinear=True, e2=None, N0=None, left_handed_csys=False):
         self.nodes = nodes
         self.label = label
-        self.section = section
+        
         self.shear_flexible = shear_flexible
         self.nonlinear = nonlinear
         
         self.dim = 3
         self.dofs_per_node = 6     
         self.domain = '3d'  
+
+        self.section = section
 
         self.N0 = N0
         self.L0 = self.get_length(undeformed=True)
@@ -941,7 +942,6 @@ class BeamElement3d(BeamElement):
         else:
             self.get_tmat = self.get_tmat_rhs            
 
-        self.mass_formulation = mass_formulation
         self.nonlinear = nonlinear
             
         self.initiate_nodes()
@@ -960,20 +960,6 @@ class BeamElement3d(BeamElement):
             self.update = self.update_nonlinear
         else:
             self.update = self.update_linear
-
-    @property
-    def mass_formulation(self):
-        return self._mass_formulation
-    
-    @mass_formulation.setter
-    def mass_formulation(self, val):
-        self._mass_formulation = val
-        if val not in ['lumped', 'consistent']:
-            raise ValueError("{'lumped', 'consistent'} are allowed values for mass_formulation. Please correct input.")
-        elif val == 'lumped':
-            self.get_local_m = self.local_m_lumped
-        elif val == 'consistent':
-            self.get_local_m = self.local_m_consistent
 
     @property
     def e2e3_dict(self):
@@ -1175,7 +1161,7 @@ class BeamElement3d(BeamElement):
 
         # Establish nodal forces in global frame of reference  
         k = self.tmat.T @ self.get_local_kd() @ self.tmat  
-        self.q = (k @ u_all).flatten()   # Equation 4.51 in Bruheim [4] (use get_k() because .k is transformed with previous T-mat)
+        self.q = (k @ u_all).flatten()   # Equation 4.51 in Bruheim [4]
         self.q_loc = self.tmat @ self.q   
 
     # ------------- FE CORE -------------------------------
@@ -1328,6 +1314,7 @@ class BeamElement3d(BeamElement):
         ])
         
         kd = kd + kd.T - np.diag(np.diag(kd))   #copy symmetric parts (& avoid doubling diagonal)
+
         return kd        
 
 
@@ -1398,9 +1385,9 @@ class BeamElement3d(BeamElement):
         return me
 
         
-    def local_m_consistent(self):
+    def local_m_timo(self):
         '''
-        Local mass matrix of element based on consistent formulation (Euler stiffness).
+        Local mass matrix of element consistent with Timoshenko formulation.
 
         Returns
         ---------
@@ -1429,7 +1416,9 @@ class BeamElement3d(BeamElement):
         m26 = mu_y**2*L * (11/210 + 11/120 * phi_y + phi_y**2/24 + I_z/(A*L**2)*(1/10-3/2*phi_y-phi_y**2))
         m28 = mu_y**2 * (9/70 + 3/10*phi_y + phi_y**2/6-6/5*I_z/(A*L**2))
         m212 = mu_y**2*L*(13/420 + 3/40*phi_y+phi_y**2/24-I_z/(A*L**2)*(1/10-phi_y/2))
+        
         m33 = mu_z**2*(13/35 + 7/10*phi_z+phi_z**2/3+6/5*I_y/(A*L**2))
+
         m35 = mu_z**2*L*(11/210 + 11/120*phi_z+phi_z**2/24+I_y/(A*L**2)*(1/10-3/2*phi_z-phi_z**2))
         m39 = mu_z**2*(11/210+11/120*phi_z+phi_z**2/24+I_y/(A*L**2)*(1/10-3/2*phi_z-phi_z**2))
         m311 = mu_z**2*L*(13/420+3/40*phi_z+phi_z**2/24-I_y/(A*L)*(1/10-phi_z/2))
@@ -1447,17 +1436,38 @@ class BeamElement3d(BeamElement):
         m812 = mu_y**2*L*(11/210+11/120*phi_y+1/24*phi_y**2+I_z/(A*L**2)*(1/10-phi_y/2))
         m911 = mu_z**2*L*(11/210+11/120*phi_z+phi_z**2/24+I_y/(A*L**2)*(1/10-phi_z/2))
 
-        m_11 = np.array([[1/3, 0 ,0],[0, m22, 0],[0, 0, m33]])
-        m_12 = np.array([[0, 0 ,0],[0, 0, m26],[0, -m35, 0]])
+        m_11 = np.array([[1/3, 0 ,0],
+                         [0, m22, 0],
+                         [0, 0, m33]])
         
-        m_13 = np.array([[1/6, 0 ,0],[0, m28, 0],[0, 0, m39]])
-        m_14 = np.array([[0, 0 ,0],[0, 0, -m212],[0, m311, 0]])
+        m_12 = np.array([[0, 0 ,0],
+                         [0, 0, m26],
+                         [0, -m35, 0]])
+        
+        m_13 = np.array([[1/6, 0 ,0],
+                         [0, m28, 0],
+                         [0, 0, m39]])
+        
+        m_14 = np.array([[0, 0 ,0],
+                         [0, 0, -m212],
+                         [0, m311, 0]])
 
-        m_22 = np.array([[m44, 0 ,0],[0, m55, 0],[0, 0, m66]])
-        m_23 = np.array([[0, 0 ,0],[0, 0, -m59],[0, m68, 0]])
+        m_22 = np.array([[m44, 0 ,0],
+                         [0, m55, 0],
+                         [0, 0, m66]])
+        
+        m_23 = np.array([[0, 0 ,0],
+                         [0, 0, -m59],
+                         [0, m68, 0]])
 
-        m_24 = np.array([[m410, 0 ,0],[0, -m511, 0],[0, 0, -m612]])
-        m_34 = np.array([[0, 0 ,0],[0, 0, -m812],[0, m911, 0]])
+        m_24 = np.array([[m410, 0 ,0],
+                         [0, -m511, 0],
+                         [0, 0, -m612]])
+        
+        m_34 = np.array([[0, 0 ,0],
+                         [0, 0, -m812],
+                         [0, m911, 0]])
+        
         O = m_11*0
         
         me = m*L*np.vstack([
@@ -1471,6 +1481,42 @@ class BeamElement3d(BeamElement):
         me = me + me.T - np.diag(np.diag(me)) #copy symmetric parts (& avoid doubling diagonal)
         return me
     
+    def local_m_euler(self):
+        '''
+        Local mass matrix of element consistent with Euler formulation.
+
+        Returns
+        ---------
+        m : float
+            local mass matrix, 12x12 numpy array 
+
+        '''
+        L = self.L
+        rx2 = self.section.J/self.section.A
+
+        A = 
+        B = 
+        C = 
+        me = np.
+
+        # me = self.section.m * L/105 * np.array([[70, 0, 0, 0, 0, 0, 35, 0, 0, 0, 0, 0],
+        #                                         [0, 78, 0, 0, 0, 22*L, 0, 27, 0, 0, 0, -13*L],
+        #                                         [0,0, 78, 0, -22*L, 0, 0, 0, 27, 0, 13*L, 0],
+        #                                         [0,0,0, 70*rx2, 0, 0, 0,0,0,-25*rx2,0,0],
+        #                                         [0,0,0,0, 8*L**2,0,0,0,-13*L,0,-6*L**2,0],
+        #                                         [0,0,0,0,0, 8*L**2,0,13*L,0,0,0,-6*L**2],
+        #                                         [0,0,0,0,0,0, 70,0,0,0,0,0],
+        #                                         [0,0,0,0,0,0,0, 78, 0, 0, 0, -22*L],
+        #                                         [0,0,0,0,0,0,0,0, 78, 0, 22*L, 0],
+        #                                         [0,0,0,0,0,0,0,0,0, 70*rx2, 0, 0],
+        #                                         [0,0,0,0,0,0,0,0,0,0, 8*L**2, 0],
+        #                                         [0,0,0,0,0,0,0,0,0,0,0, 8*L**2]
+        #                                         ])
+        me = me + me.T - np.diag(np.diag(me)) #copy symmetric parts (& avoid doubling diagonal)
+
+        return me
+
+
 
     def get_local_kg_axial(self, N=None):
         '''

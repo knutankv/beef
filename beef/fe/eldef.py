@@ -1078,7 +1078,8 @@ class ElDef:
             dof_range = el.global_dofs
             mass[np.ix_(dof_range, dof_range)] += el.get_m()
             stiffness[np.ix_(dof_range, dof_range)] += el.get_k()
-            geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg_axial()  #if N0 specified in 
+            if self.include_linear_kg:
+                geometric_stiffness[np.ix_(dof_range, dof_range)] += el.get_kg_axial()  #if N0 specified in 
 
         # Impose constraints (Lagrange or primal) if requested
         if self.constraints != None:  
