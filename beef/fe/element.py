@@ -977,7 +977,16 @@ class BeamElement3d(BeamElement):
 
     @property
     def e2e3_dict(self):
-        return {'e2': self.e2, 'e3':self.e3}
+        if hasattr(self, 'e3'):
+            e3 = self.e3
+        else:
+            e3 = None
+            
+        if hasattr(self, 'e2'):
+            e2 = self.e2
+        else:
+            e2 = None
+        return {'e2': e2, 'e3':e3}
 
     @property
     def e2(self):
