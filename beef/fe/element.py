@@ -309,20 +309,17 @@ class BeamElement2d(BeamElement):
         integer label of element
     section : Section obj, optional
         section object to define element (standard value is standard initialized Section object)
-    shear_flexible : False, optional
-        whether or not to include shear flexibility
     nonlinear : True, optional
         whether or not to use nonlinear internal functions for element
     N0 : float, optional
         applied axial force (for linearized geometric stiffness calculation)
     '''
-    def __init__(self, nodes, label, section=Section(), shear_flexible=False, 
+    def __init__(self, nodes, label, section=Section(), 
                  mass_formulation='euler', nonlinear=True, N0=None):
         self.nodes = nodes
         self.label = int(label)
         self.section = section
         
-        self.shear_flexible = shear_flexible
         self.nonlinear = nonlinear
 
         self.dofs_per_node = 3  
@@ -902,8 +899,6 @@ class BeamElement3d(BeamElement):
         integer label of element
     section : Section obj
         section describing element
-    shear_flexible : False
-        whether or not to include shear flexibility in establishment of element matrices
     nonlinear : True
         whether or not to use nonlinear formulation (corotational)
     e2 : float, optional
@@ -916,11 +911,10 @@ class BeamElement3d(BeamElement):
         in a left-handed csys (*experimental*)
     '''
     def __init__(self, nodes, label=None, section=Section(), 
-                 shear_flexible=False, nonlinear=True, e2=None, N0=None, left_handed_csys=False):
+                 nonlinear=True, e2=None, N0=None, left_handed_csys=False):
         self.nodes = nodes
         self.label = label
-        
-        self.shear_flexible = shear_flexible
+
         self.nonlinear = nonlinear
         
         self.dim = 3
@@ -1490,28 +1484,27 @@ class BeamElement3d(BeamElement):
         m : float
             local mass matrix, 12x12 numpy array 
 
+        References
+        -------------
+        https://what-when-how.com/the-finite-element-method/fem-for-frames-finite-element-method-part-1/
+
         '''
-        L = self.L
+        a = self.L/2
         rx2 = self.section.J/self.section.A
 
-        A = 
-        B = 
-        C = 
-        me = np.
-
-        # me = self.section.m * L/105 * np.array([[70, 0, 0, 0, 0, 0, 35, 0, 0, 0, 0, 0],
-        #                                         [0, 78, 0, 0, 0, 22*L, 0, 27, 0, 0, 0, -13*L],
-        #                                         [0,0, 78, 0, -22*L, 0, 0, 0, 27, 0, 13*L, 0],
-        #                                         [0,0,0, 70*rx2, 0, 0, 0,0,0,-25*rx2,0,0],
-        #                                         [0,0,0,0, 8*L**2,0,0,0,-13*L,0,-6*L**2,0],
-        #                                         [0,0,0,0,0, 8*L**2,0,13*L,0,0,0,-6*L**2],
-        #                                         [0,0,0,0,0,0, 70,0,0,0,0,0],
-        #                                         [0,0,0,0,0,0,0, 78, 0, 0, 0, -22*L],
-        #                                         [0,0,0,0,0,0,0,0, 78, 0, 22*L, 0],
-        #                                         [0,0,0,0,0,0,0,0,0, 70*rx2, 0, 0],
-        #                                         [0,0,0,0,0,0,0,0,0,0, 8*L**2, 0],
-        #                                         [0,0,0,0,0,0,0,0,0,0,0, 8*L**2]
-        #                                         ])
+        me = self.section.m * a/105 * np.array([[70, 0, 0, 0, 0, 0, 35, 0, 0, 0, 0, 0],
+                                                [0, 78, 0, 0, 0, 22*a, 0, 27, 0, 0, 0, -13*a],
+                                                [0,0, 78, 0, -22*a, 0, 0, 0, 27, 0, 13*a, 0],
+                                                [0,0,0, 70*rx2, 0, 0, 0,0,0,-25*rx2,0,0],
+                                                [0,0,0,0, 8*a**2,0,0,0,-13*a,0,-6*a**2,0],
+                                                [0,0,0,0,0, 8*a**2,0,13*a,0,0,0,-6*a**2],
+                                                [0,0,0,0,0,0, 70,0,0,0,0,0],
+                                                [0,0,0,0,0,0,0, 78, 0, 0, 0, -22*a],
+                                                [0,0,0,0,0,0,0,0, 78, 0, 22*a, 0],
+                                                [0,0,0,0,0,0,0,0,0, 70*rx2, 0, 0],
+                                                [0,0,0,0,0,0,0,0,0,0, 8*a**2, 0],
+                                                [0,0,0,0,0,0,0,0,0,0,0, 8*a**2]
+                                                ])
         me = me + me.T - np.diag(np.diag(me)) #copy symmetric parts (& avoid doubling diagonal)
 
         return me
