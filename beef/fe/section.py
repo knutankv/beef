@@ -68,14 +68,17 @@ class Section:
         self.J = J
         self.kappa = kappa
                 
-        # Beam direction
+        # Beam direction     
+        self.e2 = e2
+            
         if (e2 is not None) and (e3 is not None):
             print('Warning: both e2 and e3 input. e2 has priority and e3 is therefore disregarded.')  
             self.e2 = e2
             self.e3 = None
-        else:
-            self.e2 = e2
+        elif e3 is not None:
             self.e3 = e3
+        else:
+            self.e3 = None
 
         self.shear_deformation = shear_deformation
         

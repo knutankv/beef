@@ -826,6 +826,13 @@ class ElDef:
             
             self.update_internal_forces(u)      # on part level (element internal forces are dealt with intristicly by update function above)
     
+    def initiate_all_geometry(self):
+        '''
+        Reinitiate all geometry parameters (length, normal vector, 
+        transformation matrix, initial rotation tensor).
+        '''
+        for element in self.elements:
+            element.initiate_geometry()
 
     def update_all_geometry(self):
         '''

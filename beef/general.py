@@ -172,7 +172,7 @@ def transform_unit(e1, e2=None, e3=None, warnings=False):
     
     if e2 is not None:
         e2 = np.array(e2).flatten()
-        e3 = np.cross(e1, e2)         # Direction of the third unit vector
+        e3_tmp = np.cross(e1, e2)         # Direction of the third unit vector
         if np.all(e3==0):
             if warnings:
                 print('Warning: e1 and e2 identical. Check orientations carefully!')
@@ -180,7 +180,7 @@ def transform_unit(e1, e2=None, e3=None, warnings=False):
             e2 = e2 + 0.1
             e3 = np.cross(e1, e2) 
         
-        e2 = np.cross(e3, e1)          # Direction of the second unit vector
+        e2 = np.cross(e3_tmp, e1)          # Direction of the second unit vector
 
         e1 = e1/np.linalg.norm(e1)     # Normalize the direction vectors to become unit vectors
         e2 = e2/np.linalg.norm(e2)
@@ -188,8 +188,8 @@ def transform_unit(e1, e2=None, e3=None, warnings=False):
 
     elif e3 is not None:
         e3 = np.array(e3).flatten()
-        e2 = np.cross(e3, e1)         # Direction of the third unit vector
-        
+        e2_tmp = np.cross(e3, e1)         # Direction of the third unit vector
+        e3 = np.cross(e1, e2_tmp)
         e1 = e1/np.linalg.norm(e1)     # Normalize the direction vectors to become unit vectors
         e3 = e3/np.linalg.norm(e3)
         e2 = np.cross(e3, e1) 

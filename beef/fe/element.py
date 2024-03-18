@@ -902,7 +902,9 @@ class BeamElement3d(BeamElement):
     nonlinear : True
         whether or not to use nonlinear formulation (corotational)
     e2 : float, optional
-        3x1 numpy array describing second perpendicular vector (if not given, automatically generated)
+        3x1 numpy array describing second perpendicular vector (if not given, taken from section definition)
+    e3 : float, optional
+        3x1 numpy array describing second perpendicular vector (if not given, taken from section definition)
     N0 : 0, optional    
         axial force to use for computation of linearized geometric stiffness of element;
         if not given N from current state is assumed
@@ -911,7 +913,7 @@ class BeamElement3d(BeamElement):
         in a left-handed csys (*experimental*)
     '''
     def __init__(self, nodes, label=None, section=Section(), 
-                 nonlinear=True, e2=None, N0=None, left_handed_csys=False):
+                 nonlinear=True, e2=None, e3=None, N0=None, left_handed_csys=False):
         self.nodes = nodes
         self.label = label
 
@@ -937,11 +939,18 @@ class BeamElement3d(BeamElement):
             self.get_tmat = self.get_tmat_rhs            
 
         self.nonlinear = nonlinear
-            
-        self.initiate_nodes()
-        self.initiate_geometry()        
+        
+        self._e2_element = e2
+
+        if (e2 is not None) and (e3 is not None):
+            print('Warning: both e2 and e3 input. e2 has priority and e3 is therefore disregarded.')  
+            self._e3_element = None
+        else:
+            self._e3_element = e3
+
+        self.initiate_nodes()  
+        self.initiate_geometry()
         self.update_m()
-    
     
     @property
     def nonlinear(self):
@@ -970,28 +979,36 @@ class BeamElement3d(BeamElement):
 
     @property
     def e2(self):
-        if hasattr(self, '_e2_element'):
+        if self._e2_element is not None:
             return self._e2_element
-        elif (self.section is not None and self.section.e2 is not None) or (self.e3 is not None):
+        elif self._e3_element is not None:
+            return None
+        elif (self.section is not None and self.section.e2 is not None):
             return self.section.e2
-        else:
+        elif (self.section is not None and self.section.e3 is not None):
+            return None
+        else:   #fallback solution (no e2/e3 defined)
             smallest_ix = np.argmin(abs(self.get_vec(undeformed=True)))
             return np.eye(3)[smallest_ix, :]
 
     @e2.setter
     def e2(self, val):
-        self._e2_element = val
+        self._e2_element = np.array(val)
+        self.initiate_geometry()
+        self.update_m()
 
     @property
     def e3(self):
-        if hasattr(self, '_e3_element'):
+        if self._e3_element is not None:
             return self._e3_element
         elif self.section is not None:
             return self.section.e3
 
     @e3.setter
     def e3(self, val):
-        self._e3_element = val
+        self._e3_element = np.array(val)
+        self.initiate_geometry()
+        self.update_m()
 
     # Internal forces properties (My and Mz are in middle of beam element)
     @property
@@ -1029,14 +1046,14 @@ class BeamElement3d(BeamElement):
     
     def initiate_geometry(self):
         '''
-        Initiate transformation matrices from specified 
+        Initiate transformation matrices from initial orientations.
 
         Returns
         -------
         None.
 
         '''
-        
+
         self.update_geometry()
         self.T0 = self.Tn*1.0    #store initial transformation matrix       
         
