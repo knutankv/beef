@@ -963,6 +963,17 @@ class BeamElement3d(BeamElement):
             self.update = self.update_nonlinear
         else:
             self.update = self.update_linear
+    
+    @property
+    def has_orientation(self):
+        e2e3 = self.e2e3_dict
+        e2 = e2e3['e2']
+        e3 = e2e3['e3']
+        if (e2 is not None) or (e3 is not None):
+            return True
+        else: 
+            return False
+        
 
     @property
     def e2e3_dict(self):
@@ -993,9 +1004,11 @@ class BeamElement3d(BeamElement):
 
     @e2.setter
     def e2(self, val):
-        self._e2_element = np.array(val)
-        self.initiate_geometry()
-        self.update_m()
+        if val is not None:
+            self._e2_element = np.array(val)
+        if self.has_orientation:
+            self.initiate_geometry()
+            self.update_m()
 
     @property
     def e3(self):
@@ -1006,9 +1019,12 @@ class BeamElement3d(BeamElement):
 
     @e3.setter
     def e3(self, val):
-        self._e3_element = np.array(val)
-        self.initiate_geometry()
-        self.update_m()
+        if val is not None:
+            self._e3_element = np.array(val)
+
+        if self.has_orientation:
+            self.initiate_geometry()
+            self.update_m()
 
     # Internal forces properties (My and Mz are in middle of beam element)
     @property
