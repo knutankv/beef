@@ -308,7 +308,7 @@ class ElDef:
 
         self.elements = [self.elements[ix] for ix in range(len(self.elements)) if ix not in discard_ix]
 
-    def arrange_nodes(self, node_labels):
+    def arrange_nodes(self, node_labels, arrange_dof_ixs=False):
         '''
         Arrange nodes according to specified list of labels.
 
@@ -316,8 +316,14 @@ class ElDef:
         ------------
         node_labels : int
             list of node labels to order according to
+        arrange_dof_ixs : bool, default=False
+            whether or not to readjust the global dofs in model
         '''
         self.nodes = self.get_nodes(node_labels)
+     
+        if arrange_dof_ixs:
+            self.assign_node_dofcounts()
+            self.assign_global_dofs()    
 
     def assign_global_dofs(self):
         '''
