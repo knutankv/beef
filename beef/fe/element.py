@@ -939,7 +939,6 @@ class BeamElement3d(BeamElement):
             self.get_tmat = self.get_tmat_rhs            
 
         self.nonlinear = nonlinear
-        
         self._e2_element = e2
 
         if (e2 is not None) and (e3 is not None):
@@ -973,8 +972,7 @@ class BeamElement3d(BeamElement):
             return True
         else: 
             return False
-        
-
+    
     @property
     def e2e3_dict(self):
         if hasattr(self, 'e3'):
@@ -1002,11 +1000,10 @@ class BeamElement3d(BeamElement):
             smallest_ix = np.argmin(abs(self.get_vec(undeformed=True)))
             return np.eye(3)[smallest_ix, :]
 
-    @e2.setter
-    def e2(self, val):
+    def assign_e2(self, val, initiate_geometry=True):
         if val is not None:
             self._e2_element = np.array(val)
-        if self.has_orientation:
+        if initiate_geometry and self.has_orientation:
             self.initiate_geometry()
             self.update_m()
 
@@ -1016,13 +1013,12 @@ class BeamElement3d(BeamElement):
             return self._e3_element
         elif self.section is not None:
             return self.section.e3
-
-    @e3.setter
-    def e3(self, val):
+        
+    def assign_e3(self, val, initiate_geometry=True):
         if val is not None:
             self._e3_element = np.array(val)
 
-        if self.has_orientation:
+        if initiate_geometry and self.has_orientation:
             self.initiate_geometry()
             self.update_m()
 
@@ -1071,7 +1067,7 @@ class BeamElement3d(BeamElement):
         '''
 
         self.update_geometry()
-        self.T0 = self.Tn*1.0    #store initial transformation matrix       
+        self.T0 = self.Tn*1.0    #store initial transformation matrix   
         
     def initiate_nodes(self):
         '''
@@ -1164,7 +1160,7 @@ class BeamElement3d(BeamElement):
         R1, R2 = self.nodes[0].R, self.nodes[1].R
         e3_temp = R1 @ t0 + R2 @ t0
         e = self.get_e()    #tangent vector (from node 1 to node 2)
-        self.e2 = np.cross(e3_temp, e)/np.linalg.norm(np.cross(e3_temp, e))
+        self.assign_e2(np.cross(e3_temp, e)/np.linalg.norm(np.cross(e3_temp, e)), initiate_geometry=False)
 
 
     def update_q(self):
