@@ -50,8 +50,8 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
                   show=True, plot_tmat_ax=[1,2], tmat_opts={}, tmat_scaling=10, tmat_on=[], val_fun=None, show_maxmin=False, maxmin_fmt='.2f',
                   vals_on=[], colorbar_opts={}, clim=None, annotate_vals={}, pl=None, node_labels=False, 
                   element_labels=False, thickness_scaling=None, cmap='viridis', view=None, nodelabel_opts={}, elementlabel_opts={},
-                  element_label_fun=None, constraints_on=['undeformed','deformed'], def_constraint_opts={}, constraint_opts={}, 
-                  plot_constraints=[], node_label_fun=None, plot_node_states=None):
+                  element_label_fun=None, constraints_on=['undeformed','deformed'], def_rel_constraint_opts={}, rel_constraint_opts={}, 
+                  abs_constraint_opts={}, plot_constraints=[], node_label_fun=None, plot_node_states=None):
     
     if plot_node_states is None:
         plot_node_states = plot_states
@@ -70,15 +70,22 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
     nodes = eldef.nodes
     
     if elements[0].domain == '2d':
-        def conv_fun(xyz):
-            if len(xyz)==2:
-                return np.hstack([xyz, 0])
-            elif len(xyz)==3:
-                return np.hstack([xyz[:2], 0, 0, xyz[2], 0])
+        def conv_fun(xyz, force_mode=None):
+            if force_mode != 'coordinate':
+                if len(xyz)==2:
+                    return np.hstack([xyz, 0])
+                elif len(xyz)==3:
+                    return np.hstack([xyz[:2], 0, 0, xyz[2], 0])
+                else:
+                    raise ValueError('Wrong size of xyz')
             else:
-                raise ValueError('Wrong size of xyz')
+                if len(xyz)==2:
+                    return np.hstack([xyz, 0])
+                elif len(xyz)==3:
+                    return np.hstack([xyz[:2], 0])
     else:
-        conv_fun = lambda xyz: xyz
+        def conv_fun(xyz, force_mode=None):
+            return xyz
 
 
     def group_elements(els):
@@ -195,7 +202,7 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
             fmt_annotate = '.2f'
         
         annotate_vals = {(c+shift): (f'{annotate_vals[c]:{fmt_annotate}}' if (type(annotate_vals[c])!=str) else annotate_vals[c]) for c in annotate_vals}
-        print(annotate_vals)
+
         clim = np.array(clim) + shift    
         cmap = pv.LookupTable(cmap=cmap, scalar_range=clim, annotations=annotate_vals,
                               nan_color='#dddddd') 
@@ -258,11 +265,17 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
     nodelabel_settings.update(nodelabel_opts)
     elementlabel_settings.update(elementlabel_opts)
     
+    
     rel_constraint_settings = dict(el_settings) | {'render_lines_as_tubes': False, 'line_width':2}
     def_rel_constraint_settings = dict(def_el_settings) | {'render_lines_as_tubes': False, 'line_width': 2}
     
-    rel_constraint_settings.update(constraint_opts)
-    def_rel_constraint_settings.update(def_constraint_opts)
+    rel_constraint_settings.update(rel_constraint_opts)
+    def_rel_constraint_settings.update(def_rel_constraint_opts)
+
+    abs_constraint_settings = dict(node_settings) | {'render_points_as_spheres': False, 'point_size': 12, 'color':'red'}
+    abs_constraint_settings.update(abs_constraint_opts)
+
+    
     
     
     if pl is None:
@@ -309,7 +322,17 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
                     'deformed': def_rel_constraint_settings}
         for state in constraints_on:
             mesh = generate_constraint_mesh(eldef.constraints, field=fields[state])
-            pl.add_mesh(mesh, **settings[state])     
+            pl.add_mesh(mesh, **settings[state])    
+    if 'absolute' in plot_constraints:
+        state_dict = {'undeformed': 'coordinates', 'deformed':'x'}
+        for state in constraints_on:
+            current_field = state_dict[state]
+            relevant_nodes = []
+            for constraint in eldef.constraints:
+                relevant_nodes.append([nc.master_node for nc in constraint.node_constraints if nc.slave_node is None])
+
+            relevant_nodes = eldef.get_nodes(np.hstack(relevant_nodes).flatten())
+            pl.add_points(generate_node_mesh(relevant_nodes, current_field), **abs_constraint_settings)
 
        
     
@@ -320,7 +343,7 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
             nodes_to_plot = [node for node in nodes if node in plot_nodes]
             
         if 'undeformed' in plot_node_states:
-            pl.add_points(generate_node_mesh(nodes_to_plot, 'x0'), **node_settings)
+            pl.add_points(generate_node_mesh(nodes_to_plot, 'coordinates'), **node_settings)
         if 'deformed' in plot_node_states:
             pl.add_points(generate_node_mesh(nodes_to_plot, 'x'), **node_settings)
 
@@ -331,9 +354,9 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
         lbl = [node_label_fun(node) for node in nodes]
         
         if 'deformed' in plot_states:
-            pl.add_point_labels(np.vstack([node.x[:3] for node in nodes]), lbl, **nodelabel_settings)
+            pl.add_point_labels(np.vstack([conv_fun(node.x[:3], force_mode='coordinate') for node in nodes]), lbl, **nodelabel_settings)
         else:
-            pl.add_point_labels(np.vstack([node.x0[:3] for node in nodes]), lbl, **nodelabel_settings)            
+            pl.add_point_labels(np.vstack([conv_fun(node.coordinates) for node in nodes]), lbl, **nodelabel_settings)            
             
     if element_labels  is not False:
         if element_labels is not True:

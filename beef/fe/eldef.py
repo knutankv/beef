@@ -183,6 +183,7 @@ class ElDef:
         self.elements = [a for b in els for a in b]
         self.nodes = [item for sublist in [el.nodes for el in self.elements] for item in sublist]
         self.nodes = list(set(self.nodes))
+        self.syncronize_objects_with_labels()
         self.assign_node_dofcounts(self.nodes[0].ndofs) #TODO: should not be necessary to specify n here...
         self.assign_global_dofs()
         self.assemble(update_all=True)

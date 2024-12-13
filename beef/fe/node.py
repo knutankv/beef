@@ -33,7 +33,6 @@ class Node:
         self.global_ix = None
 
         # Defined during element initialization
-        self.x0 = None
         self.x = None
         self.u = None 
         self.vel = None     # velocity
