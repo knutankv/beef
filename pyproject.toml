@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "beefpy"
+description = "BEam Elements Framework (BEEF)"
+requires-python = ">= 3.6"
+
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Knut A. Kvaale", email = "knut.a.kvale@ntnu.no"},
+]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+]
+dynamic = ["version"]
+dependencies = ['scipy', 'numpy', 'matplotlib', 'tqdm', 'trame', 'pyvista', 'dill']
+
+
+[tool.setuptools]
+packages = ["beef"]
+
+[tool.setuptools.dynamic]
+version = {attr = "beef.__version__"}
+
+[project.urls]
+repository = "https://github.com/knutankv/beef"
+documentation = "https://knutankv.github.io/beef/"
