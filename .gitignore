@@ -6,3 +6,4 @@ _templates
 build
 beef_knutankv.egg-info
 *\.ipynb_checkpoints
+*.egg-info
