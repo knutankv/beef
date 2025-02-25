@@ -21,9 +21,8 @@ classifiers = [
 dynamic = ["version"]
 dependencies = ['scipy', 'numpy', 'matplotlib', 'tqdm', 'trame', 'pyvista', 'dill']
 
-
-[tool.setuptools]
-packages = ["beef"]
+[tool.setuptools.packages]
+find = {}
 
 [tool.setuptools.dynamic]
 version = {attr = "beef.__version__"}
