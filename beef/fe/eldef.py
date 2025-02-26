@@ -1170,9 +1170,9 @@ class ElDef:
 
         '''
         elements = [el for el in self.elements if node_label in el.nodes]  
-        node_ix = [np.where(el.nodes==node_label)[0] for el in elements]
-            
+        
         if return_node_ix:
+            node_ix = np.array([np.where(np.array(el.nodes)==node_label)[0] for el in elements]).flatten()
             return elements, node_ix
         else:
             return elements     

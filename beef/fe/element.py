@@ -40,7 +40,7 @@ class BeamElement:
 
     # ------------- GEOMETRY AND PROPERTIES ---------------------------
     def get_cog(self, deformed=False):
-        '''
+        r'''
         Get center of gravity coordinates of element.
 
         Returns
@@ -56,7 +56,7 @@ class BeamElement:
 
 
     def get_vec(self, undeformed=False):
-        '''
+        r'''
         Get vector of element (length and direction).
 
         Arguments
@@ -77,7 +77,7 @@ class BeamElement:
     
     
     def get_e(self, undeformed=False):
-        '''
+        r'''
         Get unit vector of element (direction with length 1)
 
         Returns
@@ -91,7 +91,7 @@ class BeamElement:
 
 
     def get_length(self, undeformed=False):
-        '''
+        r'''
         Get length of element.
         '''
 
@@ -99,7 +99,7 @@ class BeamElement:
 
 
     def get_psi(self, return_phi=True):
-        '''
+        r'''
         Calculates shear flexibility parameter.
 
         Arguments
@@ -158,14 +158,14 @@ class BeamElement:
         return self.tmat.T @ self.get_local_kg_axial(N=N) @ self.tmat
 
     def get_m(self):
-        '''
+        r'''
         Get global mass matrix of element.
         '''
 
         return self.tmat.T @ self.get_local_m() @ self.tmat
     
     def get_k(self):
-        '''
+        r'''
         Get global stiffness matrix of element.
         '''
 
@@ -173,20 +173,20 @@ class BeamElement:
 
     # ------------- FE UPDATING --------------------------
     def update_m(self):
-        '''
+        r'''
         Update global mass matrix of element based on local current mass matrix.
         '''
         self.m = self.tmat.T @ self.get_local_m() @ self.tmat
 
     def update_k(self):
-        '''
+        r'''
         Update global stiffness matrix of element based on local current stiffness matrix.
         '''
 
         self.k = self.tmat.T @ self.get_local_k() @ self.tmat
 
     def update_geometry(self):
-        '''
+        r'''
         Run all update geometry methods of element.
         '''
         self.L = self.get_length()
@@ -248,7 +248,7 @@ class BeamElement:
         return self.nodes[0].ndofs + self.nodes[1].ndofs
 
     def subdivide(self, n, shared_mid_nodes=True):
-        '''
+        r'''
         Divide element into n elements.
 
         Arguments
@@ -292,7 +292,7 @@ class BeamElement:
     # Transformation and rotation tensor dynamic properties
     @property
     def Tn(self):
-        '''
+        r'''
         Current transformation matrix.
         '''
         return self.tmat[:self.dim, :self.dim]
@@ -365,7 +365,7 @@ class BeamElement2d(BeamElement):
 
     # ------------- INITIALIZATION ----------------------
     def initiate_nodes(self):
-        '''
+        r'''
         Initiate nodes of element.
         '''
         for node in self.nodes:
@@ -377,14 +377,14 @@ class BeamElement2d(BeamElement):
 
     # ------------- GEOMETRY -----------------------------
     def get_e2(self):
-        '''
+        r'''
         Get first normal vector of element. 
         '''
 
         return np.array([-self.e[1], self.e[0]])
 
     def get_element_angle(self):
-        '''
+        r'''
         Get angle of element.
 
         Returns
@@ -401,7 +401,7 @@ class BeamElement2d(BeamElement):
         return el_ang
 
     def get_tmat(self):
-        '''
+        r'''
         Get transformation matrix of element.
 
         Returns
@@ -420,7 +420,7 @@ class BeamElement2d(BeamElement):
 
     # ------------- FE CORE -----------------------------
     def get_local_k(self):
-        '''
+        r'''
         Get total local nonlinear stiffness matrix.
 
         Returns
@@ -508,7 +508,7 @@ class BeamElement2d(BeamElement):
         return k_local
 
     def get_local_kd(self):
-        '''
+        r'''
         Get local deformation stiffness matrix.
 
         Returns
@@ -573,7 +573,7 @@ class BeamElement2d(BeamElement):
         return kd
 
     def local_m_lumped(self):
-        '''
+        r'''
         Local mass matrix of element based on lumped formulation.
 
         Returns
@@ -600,7 +600,7 @@ class BeamElement2d(BeamElement):
 
     
     def local_m_euler(self):
-        '''
+        r'''
         Local mass matrix of element based on consistent formulation (Euler stiffness).
 
         Returns
@@ -637,7 +637,7 @@ class BeamElement2d(BeamElement):
 
     
     def local_m_euler_trans(self):
-        '''
+        r'''
         Local mass matrix of element based on combination of
         consistent formulation (Euler stiffness) and lumped formulation.
 
@@ -660,7 +660,7 @@ class BeamElement2d(BeamElement):
 
 
     def local_m_timo(self):
-        '''
+        r'''
         Local mass matrix of element based on consistent formulation (Timoshenko stiffness).
 
         Returns
@@ -718,7 +718,7 @@ class BeamElement2d(BeamElement):
         return m
 
     def get_local_kg_axial(self, N=None):
-        '''
+        r'''
         Get local linearized geometric stiffness of element due to axial force N only.
 
         Arguments
@@ -764,7 +764,7 @@ class BeamElement2d(BeamElement):
     # -------------- UPDATE METHODS ---------------------
     
     def update_nonlinear(self, update_geometry=True):
-        '''
+        r'''
         Update element forces from nonlinear stiffness assumption.
         '''
 
@@ -776,7 +776,7 @@ class BeamElement2d(BeamElement):
 
 
     def update_linear(self):
-        '''
+        r'''
         Update element forces from linear stiffness assumption.
         '''
         self.q_loc = self.get_local_kd() @ self.tmat @ np.hstack([self.nodes[0].u, self.nodes[1].u])
@@ -789,7 +789,7 @@ class BeamElement2d(BeamElement):
         self.q = self.tmat.T @ self.get_S() @ self.t  # calculate internal forces in global format
 
     def update_v(self):
-        '''
+        r'''
         Update deformation modes of element.
 
         Notes 
@@ -812,7 +812,7 @@ class BeamElement2d(BeamElement):
         self.v[2] = ((phi_a + np.pi) % (2*np.pi)) - np.pi # % is the modulus operator, this ensures 0<phi_a<2pi
 
     def update_corot(self):
-        '''
+        r'''
         Update all corotational parameters of element based on current state.
 
         Conducts the following steps:
@@ -828,7 +828,7 @@ class BeamElement2d(BeamElement):
 
         
     def get_S(self):
-        '''
+        r'''
         Get matrix transforming from reduced (deformation modes) to full format.
 
         Returns
@@ -848,7 +848,7 @@ class BeamElement2d(BeamElement):
                          [0, 1, 1]])    
 
     def get_kd_corot(self):
-        '''
+        r'''
         Get constitutive part of stiffness matrix for deformation modes.
 
         Returns
@@ -1049,7 +1049,7 @@ class BeamElement3d(BeamElement):
     
     @property
     def R0n(self):
-        '''
+        r'''
         Rotation tensor. From C0 to C0n configuration.
         '''
         return self.Tn.T @ self.T0  #Equation 4.39 in Bruheim [4]
@@ -1057,7 +1057,7 @@ class BeamElement3d(BeamElement):
     # ------------- INITIALIZATION ----------------------
     
     def initiate_geometry(self):
-        '''
+        r'''
         Initiate transformation matrices from initial orientations.
 
         Returns
@@ -1070,7 +1070,7 @@ class BeamElement3d(BeamElement):
         self.T0 = self.Tn*1.0    #store initial transformation matrix   
         
     def initiate_nodes(self):
-        '''
+        r'''
         Initiate nodes of element.
         '''
         for node in self.nodes:
@@ -1083,7 +1083,7 @@ class BeamElement3d(BeamElement):
 
     # ------------- GEOMETRY -----------------------------
     def get_tmat_rhs(self, reps=4):
-        '''
+        r'''
         Get transformation matrix of element assuming a right-handed csys.
 
         Arguments
@@ -1101,7 +1101,7 @@ class BeamElement3d(BeamElement):
         return blkdiag(T0, reps)
     
     def get_tmat_lhs(self):
-        '''
+        r'''
         Get transformation matrix of element assuming a left-handed csys. This is only
         relevant if `BeamElement3d.left_handed_csys` is defined as `True`.
 
@@ -1130,7 +1130,7 @@ class BeamElement3d(BeamElement):
         
     # -------------- NONLINEAR UPDATE METHODS --------      
     def update_nonlinear(self):
-        '''
+        r'''
         Updates in element due to new nodal coordinates and displacements. 
         Algorithm 5.3 in Krenk [[1]](../#1).
         
@@ -1148,7 +1148,7 @@ class BeamElement3d(BeamElement):
         
 
     def update_e2(self):
-        '''
+        r'''
         Update base vectors. 
 
         Notes
@@ -1164,7 +1164,7 @@ class BeamElement3d(BeamElement):
 
 
     def update_q(self):
-        '''
+        r'''
         Update internal forces of element in nodal format. 
 
         Notes 
@@ -1189,7 +1189,7 @@ class BeamElement3d(BeamElement):
 
     # ------------- FE CORE -------------------------------
     def get_local_k(self):
-        '''
+        r'''
         Get local total stiffness matrix.
 
         Returns
@@ -1206,7 +1206,7 @@ class BeamElement3d(BeamElement):
     
     
     def get_local_kg(self):
-        '''
+        r'''
         Get geometric part of stiffness matrix on full format (local DOFs).
 
         Returns
@@ -1272,7 +1272,7 @@ class BeamElement3d(BeamElement):
            
     
     def get_local_kd(self):
-        '''
+        r'''
         Get local deformation stiffness matrix.
 
         Returns
@@ -1342,7 +1342,7 @@ class BeamElement3d(BeamElement):
 
 
     def local_m_lumped(self):
-        '''
+        r'''
         Local mass matrix of element based on lumped formulation.
 
         Returns
@@ -1409,7 +1409,7 @@ class BeamElement3d(BeamElement):
 
         
     def local_m_timo(self):
-        '''
+        r'''
         Local mass matrix of element consistent with Timoshenko formulation.
 
         Returns
@@ -1505,7 +1505,7 @@ class BeamElement3d(BeamElement):
         return me
     
     def local_m_euler(self):
-        '''
+        r'''
         Local mass matrix of element consistent with Euler formulation.
 
         Returns
@@ -1541,7 +1541,7 @@ class BeamElement3d(BeamElement):
 
 
     def get_local_kg_axial(self, N=None):
-        '''
+        r'''
         Get local linearized geometric stiffness of element due to only axial force N.
 
         Arguments
@@ -1585,7 +1585,7 @@ class BeamElement3d(BeamElement):
     
 
     def update_linear(self):
-        '''
+        r'''
         Update element forces from linear stiffness assumption.
         '''
         self.update_geometry()
@@ -1596,7 +1596,7 @@ class BeamElement3d(BeamElement):
 
     # ---------- METHODS FOR COROTATIONAL DECOMPOSITION, KRENK (NOT IN USE CURRENTLY) ----------
     def get_S(self):
-        '''
+        r'''
         Get matrix transforming from reduced (deformation modes) to full format.
 
         Returns
@@ -1626,7 +1626,7 @@ class BeamElement3d(BeamElement):
     
 
     def get_kd_corot(self):
-        '''
+        r'''
         Get constitutive part of stiffness matrix for deformation modes.
 
         Returns
@@ -1660,7 +1660,7 @@ class BarElement3d(BeamElement3d):
     '''
 
     def get_local_kg(self, N=None):
-        '''
+        r'''
         Get local linearized geometric stiffness of bar element due to axial force N (assuming three translational
         and three rotational DOFs on each node).
 

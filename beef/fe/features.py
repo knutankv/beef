@@ -7,7 +7,7 @@ import numpy as np
  
 
 class Feature:
-    '''
+    r'''
     Feature definition class.
 
     Arguments

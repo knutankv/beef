@@ -66,7 +66,7 @@ class Node:
 
 
     def increment_rotation_tensor(self):
-        '''
+        r'''
         Increments the rotation tensor describing the rotations of the node, based on defined
         increment of rotational DOFs.
 
@@ -81,7 +81,7 @@ class Node:
 
 
     def get_deformation_rotations(self, R0n):
-        '''
+        r'''
         Establishes deformation part of rotations based on input corotational configuration (rigid body motion from reference) 
         transformation matrix (defined at element level).
 

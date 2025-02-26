@@ -7,7 +7,7 @@ from scipy.linalg import null_space as null
 
 
 def n2d_ix(node_ixs, n_dofs=6):
-    '''
+    r'''
     Convert node indices to dof indices.
 
     Arguments
@@ -26,7 +26,7 @@ def n2d_ix(node_ixs, n_dofs=6):
 
 
 def extract_dofs(mat, dof_ix=[0,1,2], n_dofs=6, axis=0):
-    '''
+    r'''
     Extract selected dofs from matrix.
 
     Arguments
@@ -49,7 +49,7 @@ def extract_dofs(mat, dof_ix=[0,1,2], n_dofs=6, axis=0):
     return mat.take(get_dofs, axis=axis)
 
 def convert_dofs(dofs_in, node_type='beam3d', sort_output=True):
-    '''
+    r'''
     Convert string DOFs to indices.
 
     Arguments
@@ -81,7 +81,7 @@ def convert_dofs(dofs_in, node_type='beam3d', sort_output=True):
         
 
 def convert_dofs_list(dofs_list_in, n_nodes, node_type='beam3d', sort_output=True):
-    '''
+    r'''
     Convert DOFs list to correct format.
 
     Arguments
@@ -119,7 +119,7 @@ def convert_dofs_list(dofs_list_in, n_nodes, node_type='beam3d', sort_output=Tru
 
 
 def transform_unit(e1, e2=None, e3=None, warnings=False):
-    '''
+    r'''
     Establish transformation matrix from e1 and temporary e2 or e3 vectors.
 
     Arguments
@@ -230,7 +230,7 @@ def gdof_ix_from_nodelabels(all_node_labels, node_labels, dof_ix=[0,1,2]):     #
 
 
 def gdof_from_nodedof(node_ix, dof_ixs, n_dofs=3, merge=True):
-    '''
+    r'''
     Get global DOF from node DOF.
 
     Arguments
@@ -270,7 +270,7 @@ def gdof_from_nodedof(node_ix, dof_ixs, n_dofs=3, merge=True):
     return gdof_ix
 
 def B_to_dofpairs(B, master_val=1):
-    '''
+    r'''
     Establish pairs of indices of DOFs to couple from compatibility matrix B.
 
     Arguments
@@ -304,7 +304,7 @@ def B_to_dofpairs(B, master_val=1):
 
 
 def dof_pairs_to_Linv(dof_pairs, n_dofs):    
-    '''
+    r'''
     Establish quasi-inverse of L from dof pairs describing constraints.
 
     Arguments
@@ -346,7 +346,7 @@ def dof_pairs_to_Linv(dof_pairs, n_dofs):
 
 
 def compatibility_matrix(dof_pairs, n_dofs):
-    '''
+    r'''
     Establish compatibility matrix from specified pairs of DOFs.
 
     Arguments
@@ -374,7 +374,7 @@ def compatibility_matrix(dof_pairs, n_dofs):
 
 
 def lagrange_constrain(mat, dof_pairs, null=False):
-    '''
+    r'''
     Lagrange constrain matrix from specified DOF pairs.
 
     Arguments
@@ -406,7 +406,7 @@ def lagrange_constrain(mat, dof_pairs, null=False):
     return mat_fixed
 
 def lagrange_constrain_from_B(mat, B, null=False):
-    '''
+    r'''
     Lagrange constrain matrix from specified compatibility matrix.
 
     Arguments
@@ -432,7 +432,7 @@ def lagrange_constrain_from_B(mat, B, null=False):
 
 
 def expand_vector_with_zeros(vec, n_constraints):
-    '''
+    r'''
     Append vector with zeros based on number of constraints (n_constraints).
     '''
     vec_expanded = np.hstack([vec.flatten(), np.zeros(n_constraints)])[np.newaxis, :].T
@@ -444,7 +444,7 @@ def blkdiag(mat, n):
 
 
 def nodes_to_beam_element_matrix(node_labels, first_element_label=1):
-    '''
+    r'''
     Establish element matrix definition assuming ordered node labels.
 
     Arguments
@@ -472,7 +472,7 @@ def nodes_to_beam_element_matrix(node_labels, first_element_label=1):
 
 
 def get_phys_modes(phi, B, lambd=None, return_as_ix=False):
-    '''
+    r'''
     Get physical modes.
 
     Arguments
@@ -522,7 +522,7 @@ def get_phys_modes(phi, B, lambd=None, return_as_ix=False):
     
     
 def ensure_list(list_in, levels=1, increase_only=True):
-    '''
+    r'''
     Ensure input variable is list.
 
     Arguments
@@ -562,7 +562,7 @@ def ensure_list(list_in, levels=1, increase_only=True):
 
 
 def feature_matrix(master_dofs, values, slave_dofs=None, ndofs=None, return_small=False):
-    '''
+    r'''
     Arguments
     ---------
     master_dofs : int

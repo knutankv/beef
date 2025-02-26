@@ -1,4 +1,4 @@
-'''
+r'''
 Finite Element (FE) library
 ========================
 This module consists of all classes to create and run FE analyses. 
