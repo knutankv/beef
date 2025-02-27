@@ -15,10 +15,10 @@ BEEF is a BEam Elements Framework package for Python. The main features are:
 
 Installation 
 ========================
-Either download the repository to your computer and install, e.g. by **pip**
+Either install via PyPI as follows:
 
 ```
-pip install .
+pip install beefpy
 ```
 
 or install directly from github:
