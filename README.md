@@ -1,6 +1,6 @@
 ![BEEF logo](https://raw.githubusercontent.com/knutankv/beef/master/beef-logo.svg)
 
-What is beef?
+What is BEEF?
 =======================
 BEEF is a BEam Elements Framework package for Python. The main features are:
 
