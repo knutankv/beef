@@ -23,7 +23,7 @@ jobs:
         run: python -m build
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.4.2
+        uses: pypa/gh-action-pypi-publish@v1.13.0
         with:
           repository-url: https://pypi.org/p/beef
           user: __token__
