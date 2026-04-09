@@ -1423,6 +1423,45 @@ class Part(ElDef):
         super().__init__(nodes, elements, domain=domain, **kwargs)
 
 
+    @classmethod
+    def from_novaframe(cls, path, **kwargs):
+        '''
+        Create a `Part` from a NovaFrame .inp file. Only geometry is supported currently.
+
+        Arguments
+        ----------
+        path : str
+            Path to a NovaFrame .inp file containing NODEINS and ELEMINS records.
+
+        Returns
+        -------
+        Part
+        '''
+        node_rows = []
+        elem_rows = []
+
+        with open(path, 'r') as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.upper().startswith('NODEINS'):
+                    parts = stripped.split()
+                    # NODEINS  label  ?  ?  x  y  z  ...
+                    label = int(parts[1])
+                    x, y, z = float(parts[4]), float(parts[5]), float(parts[6])
+                    node_rows.append([label, x, y, z])
+                elif stripped.upper().startswith('ELEMINS'):
+                    parts = stripped.split()
+                    # ELEMINS  label  ?  ?  node1  node2  ...
+                    label = int(parts[1])
+                    n1, n2 = int(parts[4]), int(parts[5])
+                    elem_rows.append([label, n1, n2])
+
+        node_matrix = np.array(node_rows, dtype=float)
+        element_matrix = np.array(elem_rows, dtype=int)
+
+        return cls(node_matrix, element_matrix, **kwargs)
+    
+
 def create_nodes(node_matrix):
     '''
     Create node list from specified matrix.
@@ -1510,3 +1549,6 @@ def create_nodes_and_elements(node_matrix, element_matrix, sections=None,
             elements[el_ix] = BarElement3d([nodes[ix1], nodes[ix2]], label=int(element_matrix[el_ix, 0]), section=sections[el_ix], left_handed_csys=left_handed_csys)
         
     return nodes, elements
+
+    
+    

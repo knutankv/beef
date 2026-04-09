@@ -180,33 +180,34 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
     
     show_scalarbar = dict(undeformed=False, deformed=False)
     show_scalarbar.update({key: True for key in vals_on})
-    scalars.update({key: vals for key in vals_on})
     
     if vals is not None:
         if clim is None:
             clim = [np.min(vals[~np.isnan(vals)]), np.max(vals[~np.isnan(vals)])]
         
-        if np.min(vals[~np.isnan(vals)])<0:     #adjust for negative values
-            # print(vals[~np.isnan(vals)])
-            shift = -np.min(vals[~np.isnan(vals)])
-        else:
-            shift = 0
-            
-        vals = vals + shift
-        
-        # TODO: SUUPER PATCHY - fix later
         if 'fmt' in scalar_bar_settings:
             fmt_annotate = scalar_bar_settings['fmt']
             scalar_bar_settings['fmt'] = '%' + fmt_annotate
         else:
             fmt_annotate = '.2f'
-        
-        annotate_vals = {(c+shift): (f'{annotate_vals[c]:{fmt_annotate}}' if (type(annotate_vals[c])!=str) else annotate_vals[c]) for c in annotate_vals}
 
-        clim = np.array(clim) + shift    
-        cmap = pv.LookupTable(cmap=cmap, scalar_range=clim, annotations=annotate_vals,
-                              nan_color='#dddddd') 
-  
+        clim = np.array(clim, dtype=float)
+        shift = -min(np.nanmin(vals), clim[0])   # shift so all scalars and clim[0] are >= 0; VTK handles non-negative scalars reliably
+        vals = vals + shift
+        clim_shifted = clim + shift
+
+        # Annotations at evenly-spaced ticks showing original (unshifted) values
+        n_labels = scalar_bar_settings.get('n_labels', 4)
+        tick_shifted = np.linspace(clim_shifted[0], clim_shifted[1], n_labels)
+        tick_annotations = {float(ts): f'{ts - shift:{fmt_annotate}}' for ts in tick_shifted}
+        # User-supplied annotate_vals shifted and merged (take precedence)
+        tick_annotations.update({float(c + shift): (f'{annotate_vals[c]:{fmt_annotate}}' if type(annotate_vals[c]) != str else annotate_vals[c]) for c in annotate_vals})
+        scalar_bar_settings['n_labels'] = 0   # suppress auto-labels; annotations carry the labels
+
+        scalars.update({key: vals for key in vals_on})
+        cmap = pv.LookupTable(cmap=cmap, scalar_range=clim_shifted, annotations=tick_annotations,
+                              nan_color='#dddddd')
+
 
     else:
         cmap = None
@@ -216,11 +217,8 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
     if show_maxmin:
         max_el = elements[np.argmax(vals)]
         min_el = elements[np.argmin(vals)]
-        element_labels = [min_el, max_el]                
+        element_labels = [min_el, max_el]
         element_label_fun = get_maxmin_fun()
-
-    el_opts['clim'] = clim
-    def_el_opts['clim'] = clim
 
     canvas_settings = dict(background_color='white')
     tmat_settings = dict(show_edges=False)    
@@ -402,11 +400,16 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
     if view is not None:
         if view in ['xy', 'top']:
             pl.view_xy()
+        if view in ['-xy', 'botton']:
+            pl.view_xy(negative=True)
         if view in ['yz', 'front']:
             pl.view_yz()
+        if view in ['-yz', 'back']:
+            pl.view_yz(negative=True)
         if view in ['xz', 'side']:
             pl.view_xz()
-        
+        if view in ['-xz', 'backside']:
+            pl.view_xz(negative=True)
     
     pl.show_axes()
     if show:
