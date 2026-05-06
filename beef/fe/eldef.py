@@ -748,7 +748,7 @@ class ElDef:
             for el in els:
                 setattr(el, key, kwargs[key])
     
-    def deform(self, u, vel=None, du=None, update_tangents=True):
+    def deform(self, u, vel=None, du=None, update_tangents=True, use_constraints=False):
         '''
         Deform `ElDef` specified u.
 
@@ -762,8 +762,16 @@ class ElDef:
             displacement from last increment, used for corotational element analysis
         update_tangents : True
             whether or not to update the tangent stiffness resulting from the deformation (relevant in corotational formulation)
-
+        use_constraints : boolean, default=False
+            whether or not to use constraints in deformation (if True, the deformation is applied to the full system and the constrained dofs are 
+            then set to the constrained values, if False, the deformation is applied only to the unconstrained dofs)
+        
+        
         '''
+
+        if use_constraints and self.constraints is not None:
+            L = self.L
+            u = L @ u
 
         if vel is None:
             vel = np.array([0]*len(u))
