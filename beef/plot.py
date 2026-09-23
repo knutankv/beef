@@ -5,6 +5,8 @@ import numpy as np
 from copy import deepcopy
 import pyvista as pv
 
+from . import globals as beef_globals
+
 def flat(l):
   return [y for x in l for y in x]
     
@@ -51,7 +53,8 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
                   vals_on=[], colorbar_opts={}, clim=None, annotate_vals={}, pl=None, node_labels=False, 
                   element_labels=False, thickness_scaling=None, cmap='viridis', view=None, nodelabel_opts={}, elementlabel_opts={},
                   element_label_fun=None, constraints_on=['undeformed','deformed'], def_rel_constraint_opts={}, rel_constraint_opts={}, 
-                  abs_constraint_opts={}, plot_constraints=[], node_label_fun=None, plot_node_states=None):
+                  abs_constraint_opts={}, plot_constraints=[], node_label_fun=None, plot_node_states=None,
+                  background_plotter=None):
     
     if plot_node_states is None:
         plot_node_states = plot_states
@@ -116,7 +119,41 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
         mesh = pv.PolyData(node_pos, edges_w_padding)
         return mesh
         
+    def generate_interpolated_mesh(els, field='x'):
+        # One independent polyline per element, subdivided in n_sub points, such that a
+        # vector of values per element can be mapped as an interpolated field along the element
+        xi = np.linspace(0, 1, n_sub)[:, np.newaxis]
+
+        node_pos = []
+        lines = []
+
+        for ix, el in enumerate(els):
+            x1 = conv_fun(getattr(el.nodes[0], field))[:3]
+            x2 = conv_fun(getattr(el.nodes[1], field))[:3]
+            node_pos.append(x1 + xi*(x2-x1))
+            lines.append(np.hstack([n_sub, np.arange(ix*n_sub, (ix+1)*n_sub)]))
+
+        return pv.PolyData(np.vstack(node_pos), lines=np.hstack(lines))
+
+    def get_scalars(state, ix=None):
+        # Scalars are given as one row per element; when multiple values are given per
+        # element they are flattened to match the points of the interpolated mesh
+        s = scalars[state]
+        if s is None:
+            return None
+
+        if ix is not None:
+            s = s[ix]
+
+        if n_sub > 1:
+            return s.flatten()
+
+        return s
+
     def generate_mesh(els, field='x', pad_size=2):
+        if n_sub > 1:
+            return generate_interpolated_mesh(els, field=field)
+
         # Coordinates of nodes
         nodes = list(set([a for b in [el.nodes for el in els] for a in b])) #flat list of unique nodes
         node_pos = np.vstack([conv_fun(getattr(node, field))[:3] for node in nodes])
@@ -137,16 +174,20 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
         return node_pos
     
     def get_maxmin_fun():
-        ix_max = np.argmax(vals)
-        ix_min = np.argmin(vals)
+        ix_max = maxmin_el_ix(np.nanargmax)
+        ix_min = maxmin_el_ix(np.nanargmin)
 
         def fun(el):
             if el == elements[ix_max]:
-                return f'Max = {np.max(vals):{maxmin_fmt}}'
+                return f'Max = {np.nanmax(vals_plain):{maxmin_fmt}}'
             elif el == elements[ix_min]:
-                return f'Min = {np.min(vals):{maxmin_fmt}}'
+                return f'Min = {np.nanmin(vals_plain):{maxmin_fmt}}'
 
         return fun
+
+    def maxmin_el_ix(argfun):
+        # Element (row) index of the extreme value, based on the unshifted values
+        return int(np.unravel_index(argfun(vals_plain), vals_plain.shape)[0])
 
     
     tmat_colors = ['#ff0000', '#00ff00', '#0000ff']
@@ -175,6 +216,22 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
             val_fun = lambda el: getattr(el, vstr)
 
         vals = np.vstack([val_fun(el) for el in elements])
+
+    n_sub = 1       # number of values per element
+    vals_plain = None
+
+    if vals is not None:
+        vals = np.array(vals, dtype=float)
+
+        if vals.ndim == 1:
+            vals = vals[:, np.newaxis]
+        elif vals.ndim != 2:
+            raise ValueError('vals must be given as a single value or a vector of values per element')
+
+        # More than one value per element implies an interpolated field of values along each
+        # element, from the first value at node 1 to the last value at node 2
+        n_sub = vals.shape[1]
+        vals_plain = vals*1
 
     scalars = dict(undeformed=None, deformed=None)
     
@@ -215,8 +272,8 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
         show_scalarbar = dict(undeformed=False, deformed=False)
 
     if show_maxmin:
-        max_el = elements[np.argmax(vals)]
-        min_el = elements[np.argmin(vals)]
+        max_el = elements[maxmin_el_ix(np.nanargmax)]
+        min_el = elements[maxmin_el_ix(np.nanargmin)]
         element_labels = [min_el, max_el]
         element_label_fun = get_maxmin_fun()
 
@@ -227,7 +284,7 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
     elementlabel_settings = dict(always_visible=True, text_color='blue', shape_color='white', shape_opacity=0.4)
     
     def_el_settings = dict(
-        scalars=scalars['deformed'],
+        scalars=get_scalars('deformed'),
         render_lines_as_tubes=True,
         style='wireframe',
         line_width=4,
@@ -238,7 +295,7 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
         )
     
     el_settings = dict(
-        scalars=scalars['undeformed'],
+        scalars=get_scalars('undeformed'),
         render_lines_as_tubes=True,
         style='wireframe',
         lighting=True,
@@ -277,7 +334,15 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
     
     
     if pl is None:
-        pl = pv.Plotter()
+        if background_plotter is None:
+            plotter_class = beef_globals.get_default_plotter()
+        elif background_plotter:
+            from pyvistaqt import BackgroundPlotter
+            plotter_class = BackgroundPlotter
+        else:
+            plotter_class = pv.Plotter
+
+        pl = plotter_class()
         
     mesh = generate_mesh(elements,'x0')
 
@@ -289,7 +354,7 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
                 el_settings['line_width'] = lw0*thickness_scaling(sec)
 
                 if 'undeformed' in vals_on:
-                    el_settings['scalars'] = scalars['undeformed'][group_ixs[sec]]
+                    el_settings['scalars'] = get_scalars('undeformed', group_ixs[sec])
 
                 pl.add_mesh(generate_mesh(grouped_els[sec],'x0'), 
                              scalar_bar_args=scalar_bar_settings, annotations=annotate_vals, 
@@ -306,7 +371,7 @@ def plot_eldef(eldef, plot_elements=True, plot_states=['undeformed'], plot_nodes
                 def_el_settings['line_width'] = lw0*thickness_scaling(sec)
                 
                 if 'deformed' in vals_on:
-                    el_settings['scalars'] = scalars['deformed'][group_ixs[sec]]
+                    def_el_settings['scalars'] = get_scalars('deformed', group_ixs[sec])
 
                 pl.add_mesh(generate_mesh(grouped_els[sec], 'x'), annotations=annotate_vals,
                             scalar_bar_args=scalar_bar_settings, **def_el_settings)     
