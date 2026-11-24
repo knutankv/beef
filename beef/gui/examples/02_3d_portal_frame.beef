@@ -1,0 +1,142 @@
+{
+ "format": "beef-gui-model",
+ "version": 1,
+ "name": "3D portal frame",
+ "description": "Two columns + beam, fixed bases, lateral and vertical loads. Linear static.",
+ "domain": "3d",
+ "nodes": [
+  {
+   "label": 1,
+   "x": 0,
+   "y": 0,
+   "z": 0
+  },
+  {
+   "label": 2,
+   "x": 0,
+   "y": 0,
+   "z": 3
+  },
+  {
+   "label": 3,
+   "x": 5,
+   "y": 0,
+   "z": 3
+  },
+  {
+   "label": 4,
+   "x": 5,
+   "y": 0,
+   "z": 0
+  }
+ ],
+ "elements": [
+  {
+   "label": 1,
+   "n1": 1,
+   "n2": 2,
+   "section": "column",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 2,
+   "n1": 2,
+   "n2": 3,
+   "section": "beam",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 3,
+   "n1": 3,
+   "n2": 4,
+   "section": "column",
+   "etype": "beam",
+   "part": "1"
+  }
+ ],
+ "sections": [
+  {
+   "name": "column",
+   "E": 210000000000.0,
+   "rho": 7850,
+   "A": 0.02,
+   "I_y": 0.0002,
+   "I_z": 0.0002,
+   "J": 0.0001,
+   "poisson": 0.3,
+   "m": "",
+   "G": "",
+   "kappa": 1,
+   "shear": false,
+   "massform": "euler",
+   "e2": ""
+  },
+  {
+   "name": "beam",
+   "E": 210000000000.0,
+   "rho": 7850,
+   "A": 0.015,
+   "I_y": 0.00015,
+   "I_z": 0.00015,
+   "J": 8e-05,
+   "poisson": 0.3,
+   "m": "",
+   "G": "",
+   "kappa": 1,
+   "shear": false,
+   "massform": "euler",
+   "e2": ""
+  }
+ ],
+ "constraints": [
+  {
+   "name": "base-left",
+   "masters": "1",
+   "slaves": "",
+   "dofs": "all"
+  },
+  {
+   "name": "base-right",
+   "masters": "4",
+   "slaves": "",
+   "dofs": "all"
+  }
+ ],
+ "features": [],
+ "forces": [
+  {
+   "name": "wind",
+   "nodes": "2",
+   "dof": 0,
+   "amp": 50000,
+   "mode": "constant",
+   "texpr": ""
+  },
+  {
+   "name": "gravity",
+   "nodes": "2-3",
+   "dof": 2,
+   "amp": -20000,
+   "mode": "constant",
+   "texpr": ""
+  }
+ ],
+ "analysis": {
+  "kind": "lin_static",
+  "tmax": 1,
+  "dt": 1,
+  "t0": 0,
+  "itmax": 10,
+  "tolU": "",
+  "tolR": "",
+  "rMass": 0,
+  "rStiff": 0,
+  "beta": 0.25,
+  "gamma": 0.5,
+  "alpha": 0,
+  "nModes": "",
+  "include_kg": false
+ }
+}

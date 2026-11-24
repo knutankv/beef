@@ -192,6 +192,80 @@ class Analysis:
         return np.vstack([self.get_global_forces(ti) for ti in t]).T
 
 
+    def get_reactions(self, t=None, nonlinear=False, as_dict=True):
+        r'''
+        Get support reactions (forces and moments from the supports on the structure) after an analysis.
+
+        The reactions are established from the unconstrained (full) system as
+        $$\{R\} = [K]\{u\} - \{f\}$$
+        or, for nonlinear analyses, from the internal forces of the deformed state,
+        $$\{R\} = \{q(u)\} - \{f\}$$
+        evaluated at the DOFs constrained to ground (node-to-ground constraints). DOFs coupled by node-to-node
+        constraints (ties) are not supports and are therefore excluded. Inertia and damping forces are not
+        included, i.e., for dynamic analyses the static part of the reactions is returned.
+
+        Arguments
+        ------------
+        t : None, optional
+            time instance to establish the reactions at; the closest time step of the analysis is used
+            (standard value None gives the last time step)
+        nonlinear : False, optional
+            whether or not to use the internal forces of the deformed state (use True after `run_static`
+            and `run_dynamic`); if False, the stiffness matrix of the element definition is used (linear analyses)
+        as_dict : True, optional
+            whether to return a dictionary with the reactions of each supported node (True) or the global
+            reaction vector (False)
+
+        Returns
+        ------------
+        reactions : dict or float
+            if `as_dict` is True: dictionary {node label: numpy array with the reactions of all DOFs of the node,
+            zero for DOFs that are not constrained}, for all nodes with node-to-ground constraints;
+            otherwise: numpy array with reactions on global format (zero at DOFs not constrained to ground)
+
+        Example
+        ------------
+            analysis.run_lin_static()
+            reactions = analysis.get_reactions()
+            reactions[1]        # [Fx, Fy, Fz, Mx, My, Mz] at node 1 (3D)
+        '''
+
+        if not hasattr(self, 'u') or self.u is None:
+            raise ValueError('No displacements available: run an analysis first.')
+
+        if t is None:
+            ix = len(self.t) - 1
+        else:
+            ix = int(np.argmin(np.abs(np.asarray(self.t) - t)))
+
+        u = np.asarray(self.u)[:, ix]
+        f = self.get_global_forces(self.t[ix])
+
+        if nonlinear:
+            self.eldef.deform(u)
+            R = self.eldef.q - f
+        else:
+            R = self.eldef.k @ u - f
+
+        R_supports = np.zeros(len(R))
+        constrained = self.eldef.constrained_dofs
+        if constrained is not None and len(constrained) > 0:
+            constrained = np.asarray(constrained, dtype=int)
+            R_supports[constrained] = R[constrained]
+
+        if not as_dict:
+            return R_supports
+
+        reactions = {}
+        constrained_set = set() if constrained is None else set(int(d) for d in constrained)
+        for node in self.eldef.nodes:
+            gdofs = np.asarray(node.global_dofs, dtype=int)
+            if any(int(d) in constrained_set for d in gdofs):
+                reactions[node.label] = R_supports[gdofs]
+
+        return reactions
+
+
     def run_dynamic(self, print_progress=True, return_results=False):
         '''
         Run dynamic (nonlinear) solution, using parameters and element definition specified in parent Analysis object.

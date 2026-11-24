@@ -1,0 +1,159 @@
+{
+ "format": "beef-gui-model",
+ "version": 1,
+ "name": "2D frame with spring connection",
+ "description": "Beam + column joined by springs. Linear static.",
+ "domain": "2d",
+ "nodes": [
+  {
+   "label": 1,
+   "x": 0,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 2,
+   "x": 5,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 3,
+   "x": 10,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 11,
+   "x": 5,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 12,
+   "x": 5,
+   "y": 5,
+   "z": 0.0
+  },
+  {
+   "label": 13,
+   "x": 5,
+   "y": 10,
+   "z": 0.0
+  }
+ ],
+ "elements": [
+  {
+   "label": 1,
+   "n1": 1,
+   "n2": 2,
+   "section": "member",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 2,
+   "n1": 2,
+   "n2": 3,
+   "section": "member",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 3,
+   "n1": 11,
+   "n2": 12,
+   "section": "member",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 4,
+   "n1": 12,
+   "n2": 13,
+   "section": "member",
+   "etype": "beam",
+   "part": "1"
+  }
+ ],
+ "sections": [
+  {
+   "name": "member",
+   "E": 210000000000.0,
+   "rho": 7850,
+   "A": 0.1,
+   "I_y": 0.05,
+   "I_z": 0.0001,
+   "J": 1e-05,
+   "poisson": 0.3,
+   "m": "",
+   "G": "",
+   "kappa": 1,
+   "shear": false,
+   "massform": "euler",
+   "e2": ""
+  }
+ ],
+ "constraints": [
+  {
+   "name": "supp-left",
+   "masters": "1",
+   "slaves": "",
+   "dofs": "all"
+  },
+  {
+   "name": "supp-right",
+   "masters": "3",
+   "slaves": "",
+   "dofs": "all"
+  }
+ ],
+ "features": [
+  {
+   "ftype": "Spring",
+   "nodes": "2,11",
+   "dofs": "0,2",
+   "value": 1000000000000.0
+  },
+  {
+   "ftype": "Spring",
+   "nodes": "2,11",
+   "dofs": "1",
+   "value": 10000000.0
+  }
+ ],
+ "forces": [
+  {
+   "name": "tip",
+   "nodes": "13",
+   "dof": 0,
+   "amp": 2000000.0,
+   "mode": "constant",
+   "texpr": ""
+  },
+  {
+   "name": "tip2",
+   "nodes": "13",
+   "dof": 1,
+   "amp": 5000000.0,
+   "mode": "constant",
+   "texpr": ""
+  }
+ ],
+ "analysis": {
+  "kind": "lin_static",
+  "tmax": 1,
+  "dt": 1,
+  "t0": 0,
+  "itmax": 10,
+  "tolU": "",
+  "tolR": "",
+  "rMass": 0,
+  "rStiff": 0,
+  "beta": 0.25,
+  "gamma": 0.5,
+  "alpha": 0,
+  "nModes": "",
+  "include_kg": false
+ }
+}

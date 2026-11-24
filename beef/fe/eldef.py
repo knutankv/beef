@@ -153,31 +153,47 @@ class ElDef:
         global_dofs = np.hstack([self.get_node(nl).global_dofs for nl in nodelabels]).flatten()
         return global_dofs
 
-    def refine_mesh(self, n):
+    def refine_mesh(self, n, element_labels=None, assemble=True):
         '''
-        Refines mesh of `ElDef` by subidividing all elements by same factor. Method retains node labels of original nodes, but element labels are completely renumbered.
+        Refines mesh of `ElDef` by subidividing elements by same factor. Method retains node labels of original nodes, but element labels are completely renumbered.
+        New nodes are labelled from the largest existing node label and upwards.
         
         Arguments 
         -------------
         n : int
             number of subdivisions per element
+        element_labels : None, optional
+            labels of the elements to refine; None (standard) refines all elements
+        assemble : True, optional
+            whether or not to reassemble the structure (global matrices) after refinement - use False for large models
+            when the matrices are not needed (e.g., when only the refined geometry is of interest)
 
+        Returns
+        -------------
+        element_map : dict
+            dictionary relating each original element label to the list of new element labels it was divided into
         '''
         els = []
+        element_map = {}
         count_el = 0
-        count_n = np.max(self.get_node_labels())
+        count_n = int(np.max(self.get_node_labels()))
+        targets = None if element_labels is None else set(int(label) for label in element_labels)
 
         for el in self.elements:
-            sub_els = el.subdivide(n)
+            old_label = el.label
+            if (targets is None or int(old_label) in targets) and n > 1:
+                sub_els = el.subdivide(n)
+                for eli in sub_els[:-1]:
+                    count_n = count_n + 1
+                    eli.nodes[1].label = count_n*1
+            else:
+                sub_els = [el]
 
             for eli in sub_els:
                 count_el = count_el + 1
                 eli.label = count_el*1
-
-            for eli in sub_els[:-1]:
-                count_n = count_n + 1
-                eli.nodes[1].label = count_n*1
             
+            element_map[old_label] = [eli.label for eli in sub_els]
             els.append(sub_els)
 
         self.elements = [a for b in els for a in b]
@@ -186,7 +202,10 @@ class ElDef:
         self.syncronize_objects_with_labels()
         self.assign_node_dofcounts(self.nodes[0].ndofs) #TODO: should not be necessary to specify n here...
         self.assign_global_dofs()
-        self.assemble(update_all=True)
+        if assemble:
+            self.assemble(update_all=True)
+
+        return element_map
 
 
     def get_feature(self, name):

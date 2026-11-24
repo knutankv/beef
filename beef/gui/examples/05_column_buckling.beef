@@ -1,0 +1,210 @@
+{
+ "format": "beef-gui-model",
+ "version": 1,
+ "name": "Column buckling",
+ "description": "Cantilever column under axial load. Critical load factors.",
+ "domain": "2d",
+ "nodes": [
+  {
+   "label": 1,
+   "x": 0,
+   "y": 0.0,
+   "z": 0.0
+  },
+  {
+   "label": 2,
+   "x": 0,
+   "y": 0.5,
+   "z": 0.0
+  },
+  {
+   "label": 3,
+   "x": 0,
+   "y": 1.0,
+   "z": 0.0
+  },
+  {
+   "label": 4,
+   "x": 0,
+   "y": 1.5,
+   "z": 0.0
+  },
+  {
+   "label": 5,
+   "x": 0,
+   "y": 2.0,
+   "z": 0.0
+  },
+  {
+   "label": 6,
+   "x": 0,
+   "y": 2.5,
+   "z": 0.0
+  },
+  {
+   "label": 7,
+   "x": 0,
+   "y": 3.0,
+   "z": 0.0
+  },
+  {
+   "label": 8,
+   "x": 0,
+   "y": 3.5,
+   "z": 0.0
+  },
+  {
+   "label": 9,
+   "x": 0,
+   "y": 4.0,
+   "z": 0.0
+  },
+  {
+   "label": 10,
+   "x": 0,
+   "y": 4.5,
+   "z": 0.0
+  },
+  {
+   "label": 11,
+   "x": 0,
+   "y": 5.0,
+   "z": 0.0
+  }
+ ],
+ "elements": [
+  {
+   "label": 1,
+   "n1": 1,
+   "n2": 2,
+   "section": "col",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 2,
+   "n1": 2,
+   "n2": 3,
+   "section": "col",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 3,
+   "n1": 3,
+   "n2": 4,
+   "section": "col",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 4,
+   "n1": 4,
+   "n2": 5,
+   "section": "col",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 5,
+   "n1": 5,
+   "n2": 6,
+   "section": "col",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 6,
+   "n1": 6,
+   "n2": 7,
+   "section": "col",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 7,
+   "n1": 7,
+   "n2": 8,
+   "section": "col",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 8,
+   "n1": 8,
+   "n2": 9,
+   "section": "col",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 9,
+   "n1": 9,
+   "n2": 10,
+   "section": "col",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 10,
+   "n1": 10,
+   "n2": 11,
+   "section": "col",
+   "etype": "beam",
+   "part": "1"
+  }
+ ],
+ "sections": [
+  {
+   "name": "col",
+   "E": 210000000000.0,
+   "rho": 7850,
+   "A": 0.01,
+   "I_y": 8.33e-06,
+   "I_z": 0.0001,
+   "J": 1e-05,
+   "poisson": 0.3,
+   "m": "",
+   "G": "",
+   "kappa": 1,
+   "shear": false,
+   "massform": "euler",
+   "e2": ""
+  }
+ ],
+ "constraints": [
+  {
+   "name": "base",
+   "masters": "1",
+   "slaves": "",
+   "dofs": "all"
+  }
+ ],
+ "features": [],
+ "forces": [
+  {
+   "name": "axial",
+   "nodes": "11",
+   "dof": 1,
+   "amp": -1,
+   "mode": "constant",
+   "texpr": ""
+  }
+ ],
+ "analysis": {
+  "kind": "buckling",
+  "tmax": 1,
+  "dt": 1,
+  "t0": 0,
+  "itmax": 10,
+  "tolU": "",
+  "tolR": "",
+  "rMass": 0,
+  "rStiff": 0,
+  "beta": 0.25,
+  "gamma": 0.5,
+  "alpha": 0,
+  "nModes": 4,
+  "include_kg": false
+ }
+}

@@ -1,0 +1,235 @@
+{
+ "format": "beef-gui-model",
+ "version": 1,
+ "name": "Simply-supported beam - modal",
+ "description": "Pin/roller beam. Natural frequencies & mode shapes.",
+ "domain": "2d",
+ "nodes": [
+  {
+   "label": 1,
+   "x": 0.0,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 2,
+   "x": 0.8333333333333334,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 3,
+   "x": 1.6666666666666667,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 4,
+   "x": 2.5,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 5,
+   "x": 3.3333333333333335,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 6,
+   "x": 4.166666666666667,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 7,
+   "x": 5.0,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 8,
+   "x": 5.833333333333333,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 9,
+   "x": 6.666666666666667,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 10,
+   "x": 7.5,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 11,
+   "x": 8.333333333333334,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 12,
+   "x": 9.166666666666666,
+   "y": 0,
+   "z": 0.0
+  },
+  {
+   "label": 13,
+   "x": 10.0,
+   "y": 0,
+   "z": 0.0
+  }
+ ],
+ "elements": [
+  {
+   "label": 1,
+   "n1": 1,
+   "n2": 2,
+   "section": "deck",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 2,
+   "n1": 2,
+   "n2": 3,
+   "section": "deck",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 3,
+   "n1": 3,
+   "n2": 4,
+   "section": "deck",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 4,
+   "n1": 4,
+   "n2": 5,
+   "section": "deck",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 5,
+   "n1": 5,
+   "n2": 6,
+   "section": "deck",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 6,
+   "n1": 6,
+   "n2": 7,
+   "section": "deck",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 7,
+   "n1": 7,
+   "n2": 8,
+   "section": "deck",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 8,
+   "n1": 8,
+   "n2": 9,
+   "section": "deck",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 9,
+   "n1": 9,
+   "n2": 10,
+   "section": "deck",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 10,
+   "n1": 10,
+   "n2": 11,
+   "section": "deck",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 11,
+   "n1": 11,
+   "n2": 12,
+   "section": "deck",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 12,
+   "n1": 12,
+   "n2": 13,
+   "section": "deck",
+   "etype": "beam",
+   "part": "1"
+  }
+ ],
+ "sections": [
+  {
+   "name": "deck",
+   "E": 210000000000.0,
+   "rho": 7850,
+   "A": 0.02,
+   "I_y": 0.0004,
+   "I_z": 0.0001,
+   "J": 1e-05,
+   "poisson": 0.3,
+   "m": "",
+   "G": "",
+   "kappa": 1,
+   "shear": false,
+   "massform": "euler",
+   "e2": ""
+  }
+ ],
+ "constraints": [
+  {
+   "name": "pin",
+   "masters": "1",
+   "slaves": "",
+   "dofs": "0,1"
+  },
+  {
+   "name": "roller",
+   "masters": "13",
+   "slaves": "",
+   "dofs": "1"
+  }
+ ],
+ "features": [],
+ "forces": [],
+ "analysis": {
+  "kind": "eig",
+  "tmax": 1,
+  "dt": 1,
+  "t0": 0,
+  "itmax": 10,
+  "tolU": "",
+  "tolR": "",
+  "rMass": 0,
+  "rStiff": 0,
+  "beta": 0.25,
+  "gamma": 0.5,
+  "alpha": 0,
+  "nModes": 6,
+  "include_kg": false
+ }
+}

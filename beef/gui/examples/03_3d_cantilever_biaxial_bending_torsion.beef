@@ -1,0 +1,220 @@
+{
+ "format": "beef-gui-model",
+ "version": 1,
+ "name": "3D cantilever, biaxial bending + torsion",
+ "description": "Loads in y, z, torsion and axial: all six section forces. Linear static.",
+ "domain": "3d",
+ "nodes": [
+  {
+   "label": 1,
+   "x": 0.0,
+   "y": 0,
+   "z": 0
+  },
+  {
+   "label": 2,
+   "x": 0.5,
+   "y": 0,
+   "z": 0
+  },
+  {
+   "label": 3,
+   "x": 1.0,
+   "y": 0,
+   "z": 0
+  },
+  {
+   "label": 4,
+   "x": 1.5,
+   "y": 0,
+   "z": 0
+  },
+  {
+   "label": 5,
+   "x": 2.0,
+   "y": 0,
+   "z": 0
+  },
+  {
+   "label": 6,
+   "x": 2.5,
+   "y": 0,
+   "z": 0
+  },
+  {
+   "label": 7,
+   "x": 3.0,
+   "y": 0,
+   "z": 0
+  },
+  {
+   "label": 8,
+   "x": 3.5,
+   "y": 0,
+   "z": 0
+  },
+  {
+   "label": 9,
+   "x": 4.0,
+   "y": 0,
+   "z": 0
+  },
+  {
+   "label": 10,
+   "x": 4.5,
+   "y": 0,
+   "z": 0
+  }
+ ],
+ "elements": [
+  {
+   "label": 1,
+   "n1": 1,
+   "n2": 2,
+   "section": "RHS 300x200",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 2,
+   "n1": 2,
+   "n2": 3,
+   "section": "RHS 300x200",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 3,
+   "n1": 3,
+   "n2": 4,
+   "section": "RHS 300x200",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 4,
+   "n1": 4,
+   "n2": 5,
+   "section": "RHS 300x200",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 5,
+   "n1": 5,
+   "n2": 6,
+   "section": "RHS 300x200",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 6,
+   "n1": 6,
+   "n2": 7,
+   "section": "RHS 300x200",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 7,
+   "n1": 7,
+   "n2": 8,
+   "section": "RHS 300x200",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 8,
+   "n1": 8,
+   "n2": 9,
+   "section": "RHS 300x200",
+   "etype": "beam",
+   "part": "1"
+  },
+  {
+   "label": 9,
+   "n1": 9,
+   "n2": 10,
+   "section": "RHS 300x200",
+   "etype": "beam",
+   "part": "1"
+  }
+ ],
+ "sections": [
+  {
+   "name": "RHS 300x200",
+   "E": 210000000000.0,
+   "rho": 7850,
+   "A": 0.012,
+   "I_y": 0.00014,
+   "I_z": 7.5e-05,
+   "J": 0.00016,
+   "poisson": 0.3,
+   "m": "",
+   "G": "",
+   "kappa": 1,
+   "shear": false,
+   "massform": "euler",
+   "e2": "0,1,0"
+  }
+ ],
+ "constraints": [
+  {
+   "name": "clamped",
+   "masters": "1",
+   "slaves": "",
+   "dofs": "all"
+  }
+ ],
+ "features": [],
+ "forces": [
+  {
+   "name": "Fy",
+   "nodes": "10",
+   "dof": 1,
+   "amp": 10000.0,
+   "mode": "constant",
+   "texpr": ""
+  },
+  {
+   "name": "Fz",
+   "nodes": "10",
+   "dof": 2,
+   "amp": -20000.0,
+   "mode": "constant",
+   "texpr": ""
+  },
+  {
+   "name": "T",
+   "nodes": "10",
+   "dof": 3,
+   "amp": 5000.0,
+   "mode": "constant",
+   "texpr": ""
+  },
+  {
+   "name": "N",
+   "nodes": "10",
+   "dof": 0,
+   "amp": 50000.0,
+   "mode": "constant",
+   "texpr": ""
+  }
+ ],
+ "analysis": {
+  "kind": "lin_static",
+  "tmax": 1,
+  "dt": 1,
+  "t0": 0,
+  "itmax": 10,
+  "tolU": "",
+  "tolR": "",
+  "rMass": 0,
+  "rStiff": 0,
+  "beta": 0.25,
+  "gamma": 0.5,
+  "alpha": 0,
+  "nModes": "",
+  "include_kg": false
+ }
+}

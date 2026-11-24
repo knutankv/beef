@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BEEF GUI</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">🥩 <span>BEEF&nbsp;<b>GUI</b></span></div>
+    <div class="tag"><span id="beefVer">beef</span> <span id="modelName"></span></div>
+    <div class="spacer"></div>
+    <button class="hbtn" id="btnExamples">📂 Examples</button>
+    <button class="hbtn" id="btnLoad">📤 Open .beef</button>
+    <button class="hbtn" id="btnSave">💾 Save .beef</button>
+    <button class="hbtn" id="btnCode">🐍 Python script</button>
+    <button class="hbtn" id="btnHelp">? Help</button>
+  </header>
+
+  <!-- LEFT: builder -->
+  <aside class="left">
+    <div class="lsplit" id="lsplit" title="Drag to resize the panel (double-click to reset)"></div>
+    <div class="tabs" id="ltabs">
+      <div class="tab active" data-pane="p-model">Model</div>
+      <div class="tab" data-pane="p-sections">Sections</div>
+      <div class="tab" data-pane="p-support">Supports</div>
+      <div class="tab" data-pane="p-features">Features</div>
+      <div class="tab" data-pane="p-forces">Loads</div>
+      <div class="tab" data-pane="p-analysis">Analysis</div>
+    </div>
+    <div class="panes">
+      <!-- MODEL -->
+      <div class="pane active" id="p-model">
+        <h3 class="sect">Domain</h3>
+        <div class="row">
+          <label>Dimension</label>
+          <select id="domain" class="grow">
+            <option value="3d">3D &nbsp;(6 DOF/node: ux uy uz rx ry rz)</option>
+            <option value="2d">2D &nbsp;(3 DOF/node: ux uy rz)</option>
+          </select>
+        </div>
+        <div class="hint">Nodes and elements below define the mesh passed to <code>fe.Part</code> as the node &amp; element matrices. Elements grouped into different <b>parts</b> are combined with <code>fe.Assembly</code>.</div>
+
+        <h3 class="sect">Nodes <span class="badge" id="nNodes">0</span></h3>
+        <div class="btnrow">
+          <button class="btn sm" id="addNode">+ Node</button>
+          <button class="btn sm ghost" id="genLine">Generate line…</button>
+          <button class="btn sm ghost danger" id="clrNodes">Clear</button>
+        </div>
+        <div style="max-height:180px;overflow:auto">
+          <table class="grid" id="tNodes"><thead><tr><th>Label</th><th>x</th><th>y</th><th class="zcol">z</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <h3 class="sect" style="margin-top:14px">Elements <span class="badge" id="nEls">0</span></h3>
+        <div class="btnrow">
+          <button class="btn sm" id="addEl">+ Element</button>
+          <button class="btn sm ghost" id="chainEls">Chain nodes…</button>
+          <button class="btn sm ghost" id="refineEls" title="Subdivide elements with beef's ElDef.refine_mesh">Refine mesh…</button>
+          <button class="btn sm ghost" id="undoRefine" style="display:none" title="Restore the mesh before the last refinement">Undo refine</button>
+          <button class="btn sm ghost danger" id="clrEls">Clear</button>
+        </div>
+        <div style="max-height:200px;overflow:auto">
+          <table class="grid" id="tEls"><thead><tr><th>Lbl</th><th>n1</th><th>n2</th><th>Section</th><th>Type</th><th>Part</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="tip">“Part” groups elements; 2+ distinct parts ⇒ an <code>fe.Assembly</code> is generated.</div>
+
+        <h3 class="sect" style="margin-top:14px">Selection &amp; visibility <span class="badge" id="nSel">0</span></h3>
+        <div class="row"><label>Selected elements</label><input class="grow" type="text" id="selList" placeholder="e.g. 1-20,55 — or click elements in the view"></div>
+        <div class="row"><label>By section</label><select class="grow" id="selSec"></select>
+          <button class="btn sm" id="selSecSet" title="Select all elements with this section">Select</button>
+          <button class="btn sm ghost" id="selSecAdd" title="Add elements with this section to the selection">+ Add</button></div>
+        <div class="btnrow">
+          <button class="btn sm" id="selIsolate">Show selected only</button>
+          <button class="btn sm ghost" id="selHide">Hide selected</button>
+          <button class="btn sm ghost" id="selShowAll">Show all</button>
+          <button class="btn sm ghost" id="selInvert">Invert</button>
+          <button class="btn sm ghost danger" id="selClear">Clear selection</button>
+        </div>
+        <div class="row"><label class="inline"><input type="checkbox" id="selTable"> element table: list selected elements only</label></div>
+        <div class="tip">In the view: click an element to select it, shift/ctrl-click to add or remove, ctrl-drag a box to select the elements inside it (shift+ctrl-drag adds). <span id="visInfo"></span></div>
+      </div>
+
+      <!-- SECTIONS -->
+      <div class="pane" id="p-sections">
+        <h3 class="sect">Cross-sections / materials</h3>
+        <div class="hint">Each maps to a <code>fe.Section(...)</code>. Blank optional fields fall back to beef defaults. In 2D only <code>I_y</code> is used for bending.</div>
+        <div class="btnrow"><button class="btn sm" id="addSec">+ Section</button></div>
+        <div id="secList"></div>
+      </div>
+
+      <!-- SUPPORTS / CONSTRAINTS -->
+      <div class="pane" id="p-support">
+        <h3 class="sect">Constraints</h3>
+        <div class="hint"><b>To ground</b> = support (leave “slave” empty) → <code>fe.Constraint([masters], dofs=…)</code>. <b>Node-to-node</b> ties masters↔slaves. DOFs: <code>all</code>, <code>trans</code>, <code>rot</code>, or indices like <code>0,1,2</code>.</div>
+        <div class="btnrow"><button class="btn sm" id="addCon">+ Constraint</button></div>
+        <div id="conList"></div>
+      </div>
+
+      <!-- FEATURES -->
+      <div class="pane" id="p-features">
+        <h3 class="sect">Features — springs, dashpots, masses, matrices</h3>
+        <div class="hint">Maps to <code>fe.Spring</code> / <code>fe.Dashpot</code> / <code>fe.PointMass</code>. One node ⇒ grounded element at that DOF; two nodes ⇒ connects them. DOFs as indices, e.g. <code>0,1,2</code>. <b>Matrix</b> maps to <code>fe.CustomMatrix</code>: a full (coupled) stiffness, damping or mass matrix over the listed node(s) × DOFs, e.g. a 6×6 pontoon mass or a spring in a rotated axis system.</div>
+        <div class="btnrow"><button class="btn sm" id="addFeat">+ Feature</button></div>
+        <div id="featList"></div>
+      </div>
+
+      <!-- FORCES -->
+      <div class="pane" id="p-forces">
+        <h3 class="sect">Loads</h3>
+        <div class="hint">Maps to <code>fe.Force(node_labels, dofs, amplitudes, t=…)</code>. <b>Constant</b>: static value. <b>Ramp</b>: 0→amp over <code>t</code> (good for nonlinear static). <b>History</b>: expression <code>a(t)</code> sampled on the analysis time axis (for dynamics).</div>
+        <div class="btnrow"><button class="btn sm" id="addForce">+ Load</button>
+          <span class="spacer" style="flex:1"></span>
+          <button class="btn sm ghost" id="allToBase" title="Set the case of all nodal and element loads to static base (time-history loads stay analysis loads)">All → static base</button>
+          <button class="btn sm ghost" id="allToAnalysis" title="Set the case of all nodal and element loads to analysis">All → analysis</button></div>
+        <div id="forceList"></div>
+
+        <h3 class="sect" style="margin-top:14px">Element loads</h3>
+        <div class="hint">Constant distributed load on elements, converted to equivalent nodal forces (and end moments) with <code>fe.create_nodal_load_from_element_load</code>: self weight from the sections, a constant mass per length, a total mass, or an expression in <code>sec</code> giving the load per length.</div>
+        <div class="btnrow"><button class="btn sm" id="addElLoad">+ Element load</button><button class="btn sm ghost" id="addSelfWeight">+ Self weight (all)</button></div>
+        <div id="elLoadList"></div>
+      </div>
+
+      <!-- ANALYSIS -->
+      <div class="pane" id="p-analysis">
+        <h3 class="sect">Analysis</h3>
+        <div class="row">
+          <label>Type</label>
+          <select id="anaKind" class="grow">
+            <option value="lin_static">Linear static — run_lin_static()</option>
+            <option value="static">Nonlinear static (corotational) — run_static()</option>
+            <option value="eig">Modal / eigenvalue — run_eig()</option>
+            <option value="lin_dynamic">Linear dynamic (Newmark) — run_lin_dynamic()</option>
+            <option value="dynamic">Nonlinear dynamic — run_dynamic()</option>
+            <option value="buckling">Linear buckling — run_lin_buckling()</option>
+          </select>
+        </div>
+        <div id="anaParams"></div>
+        <div class="warn" id="anaNote"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- CENTER: viewport -->
+  <main>
+    <div class="vptop">
+      <button class="vpbtn" id="vFit">⤢ Fit</button>
+      <div class="sep"></div>
+      <button class="vpbtn" id="vTop">Top</button>
+      <button class="vpbtn" id="vFront">Front</button>
+      <button class="vpbtn" id="vSide">Side</button>
+      <button class="vpbtn" id="vIso">Iso</button>
+      <div class="sep"></div>
+      <button class="vpbtn on" id="tLabels">Labels</button>
+      <button class="vpbtn on" id="tSup">Supports</button>
+      <button class="vpbtn on" id="tLoads">Loads</button>
+      <button class="vpbtn" id="tIsolate" title="Show only the selected elements (toggle)">Isolate</button>
+      <button class="vpbtn" id="tEAxes" title="Element local axes: x (red, along the element), y (green), z (blue)">Elem. axes</button>
+      <button class="vpbtn" id="tCsys" title="Global coordinate system at the origin (0, 0, 0)">Global CSYS</button>
+      <div class="sep"></div>
+      <button class="vpbtn on" id="tResult" title="Show/hide the last result (hidden automatically when the analysis type changes)">Result</button>
+      <button class="vpbtn" id="tDef">Deformed</button>
+      <button class="vpbtn" id="tDiag">Diagrams</button>
+      <button class="vpbtn" id="vScaleBtn">Scale…</button>
+      <div class="spacer" style="flex:1"></div>
+      <select id="solverSel" class="hsel" title="auto: sparse for large modal / linear static models, beef otherwise">
+        <option value="auto">solver: auto</option><option value="beef">solver: beef</option><option value="sparse">solver: sparse</option></select>
+      <button class="btn pri" id="btnRun">▶ Run analysis</button>
+    </div>
+    <div class="vpwrap">
+      <canvas id="view"></canvas>
+      <div class="legend" id="legend"></div>
+      <div class="vphint">drag = orbit · wheel = zoom · right/shift-drag = pan · click = select/inspect · ctrl-drag = box select</div>
+      <div class="selbox" id="selBox"></div>
+      <div class="pickbanner" id="pickBanner"></div>
+      <div class="vpscale" id="scaleBox">
+        <label>Deformation scale: <b id="scaleVal">1×</b></label>
+        <input type="range" id="scaleRange" min="-2" max="4" step="0.05" value="0" style="width:170px">
+        <label style="margin-top:8px"><input type="checkbox" id="autoScale" checked> auto-fit</label>
+        <div id="baseBox" style="display:none;margin-top:8px;border-top:1px solid var(--line);padding-top:6px">
+          <label style="display:block">Base state view</label>
+          <select id="baseView" style="width:100%"><option value="both">base + mode</option><option value="base">base state only</option><option value="mode">mode only</option></select>
+          <div id="baseScaleRow" style="display:none;align-items:center;gap:6px;margin-top:4px"><span style="color:var(--muted)">base scale</span>
+            <input type="number" id="baseScale" value="1" step="any" style="width:70px" title="1 = true size of the static base deformation (modes have their own scale)"></div>
+        </div>
+        <div style="margin-top:8px" id="animBox">
+          <button class="btn sm" id="btnAnim">▶ Animate</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- RIGHT: results -->
+  <aside class="right">
+    <div class="rtop">
+      <div class="status"><span class="dot" id="statDot"></span><span id="statTxt">Connecting…</span></div>
+    </div>
+    <div class="results" id="resultsBox">
+      
+    </div>
+  </aside>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- HELP MODAL -->
+<div class="modal" id="helpModal"><div class="box">
+  <button class="closex" data-close>×</button>
+  <h2>BEEF GUI</h2>
+  <p>A graphical front end for <a href="https://knutankv.github.io/beef/" target="_blank" rel="noopener">beef</a> (BEam Elements Framework). The page talks to a small Python server on this computer (started with <code>beef-gui</code> / <code>python -m beef.gui</code>), which runs the <b>installed</b> beef — update beef and the GUI uses the new version.</p>
+  <h4>Workflow</h4>
+  <ul>
+    <li><b>Model</b> — 2D/3D, nodes &amp; elements (or the generators).</li>
+    <li><b>Sections</b> — <code>E, A, I_y, I_z, J…</code>, optional orientation <code>e2</code>.</li>
+    <li><b>Supports</b> — constraints to ground or node-to-node ties.</li>
+    <li><b>Features</b> — springs, dashpots, point masses and full matrices (<code>fe.CustomMatrix</code>).</li>
+    <li><b>Loads</b> — nodal forces/moments: constant, ramp, or time history.</li>
+    <li><b>Analysis</b> — pick the analysis and parameters, then <b>▶ Run</b>.</li>
+  </ul>
+  <p>Node fields in Supports, Features and Loads accept typing (<code>1,4,7-9</code>) or <b>picking</b>: click into the field, then click nodes in the view to add/remove them (Esc when done).</p>
+  <h4>Running and output</h4>
+  <p>Analyses run as jobs in the Python session. The drawer at the bottom shows each job's output (the same text appears in the terminal), lets you cancel jobs, and has a Python console with <code>eldef</code>, <code>analysis</code>, <code>result</code>, <code>np</code>, <code>fe</code> and <code>beef</code>.</p>
+  <p><b>Solver:</b> <i>beef</i> uses beef's Analysis directly. <i>sparse</i> uses beef's element and feature matrices with sparse assembly and solvers (modal: undamped modes; linear static) — much faster for large models. <i>auto</i> picks sparse above <span id="largeDofs"></span> DOFs for those two analysis types.</p>
+  <h4>Files</h4>
+  <p><b>.beef</b> files hold the model as JSON (Open/Save). The Examples list shows the .beef files in the examples folder of <code>beef.gui</code> (and folders in <code>BEEF_GUI_EXAMPLES</code>). <b>Python script</b> exports the model and analysis as a plain beef script.</p>
+  <h4>DOF indices</h4>
+  <p>2D node: <code>0</code>=ux, <code>1</code>=uy, <code>2</code>=rz. &nbsp; 3D node: <code>0</code>=ux, <code>1</code>=uy, <code>2</code>=uz, <code>3</code>=rx, <code>4</code>=ry, <code>5</code>=rz.</p>
+</div></div>
+
+<!-- EXAMPLES MODAL -->
+<div class="modal" id="exModal"><div class="box">
+  <button class="closex" data-close>×</button>
+  <h2>Example models</h2>
+  <p>Model files (<code>.beef</code>) from: <span class="tip" id="exDirs"></span></p>
+  <div id="exList"></div>
+</div></div>
+
+<!-- PYTHON SCRIPT MODAL -->
+<div class="modal" id="codeModal"><div class="box wide">
+  <button class="closex" data-close>×</button>
+  <h2>Python script</h2>
+  <p>The model and analysis as a plain beef script (the GUI builds the model with exactly this code).</p>
+  <div class="btnrow"><button class="btn sm" id="cpCode">📋 Copy</button><button class="btn sm" id="dlCode">⬇ Download .py</button></div>
+  <pre class="code" id="codePre" style="max-height:62vh"></pre>
+</div></div>
+
+<!-- JOB / LOG DRAWER -->
+<div class="drawer" id="drawer">
+  <div class="dhead" id="drawerHead"><span class="dot" id="drawerDot"></span><span id="drawerStatus">No jobs yet</span><span class="spacer"></span><span class="tip">Log &amp; console ▴</span></div>
+  <div class="dbody">
+    <div class="jobcol"><div id="jobList"></div></div>
+    <div class="logcol">
+      <div class="row" style="margin:0 0 4px"><b id="jobTitle" class="tip">Select a job</b><span class="spacer"></span>
+        <button class="btn sm danger" id="jobCancel" disabled>Cancel</button><button class="btn sm ghost" id="jobClear">Clear finished</button></div>
+      <pre id="jobLog"></pre>
+      <input id="consoleIn" type="text" placeholder="Python console › e.g. eldef, analysis.u.shape, result['frequencies'][:3]   (Enter to run)">
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
